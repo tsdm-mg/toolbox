@@ -1,0 +1,12 @@
+[package]
+name = "tm-types"
+version.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Definition of common types"
+
+[dependencies]
+serde.workspace = true
+serde_repr.workspace = true
