@@ -75,8 +75,10 @@ pub async fn fetch_thread_content(tid: u32, page: u32) -> Result<Thread> {
     let thread_data = decompress_response_to_string(resp)
         .await
         .context("when parsing thread data")?
-        .replace("\u{000D}", "")
-        .replace("\u{000A}", "YYYYYYYY");
+        // Remove CR and LF
+        // The CR is useless and remove it is safe.
+        // The LF only follows "<br />" which is useless and can be safely removed, too.
+        .replace(['\u{000A}', '\u{000D}'], "");
 
     // Check if error occurred.
     // Currently, we are checking error response by try to deserialize the data into pre-defined
