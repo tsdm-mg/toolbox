@@ -74,7 +74,9 @@ pub async fn fetch_thread_content(tid: u32, page: u32) -> Result<Thread> {
     }
     let thread_data = decompress_response_to_string(resp)
         .await
-        .context("when parsing thread data")?;
+        .context("when parsing thread data")?
+        .replace("\u{000D}", "XXXXXXXXXXXXXX")
+        .replace("\u{000A}", "YYYYYYYY");
 
     // Check if error occurred.
     // Currently, we are checking error response by try to deserialize the data into pre-defined

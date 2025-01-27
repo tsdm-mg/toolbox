@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for MultilineString {
         D: Deserializer<'de>,
     {
         println!(">>>> DESERIALIZING");
-        let content = deserializer.deserialize_struct(MultilineStringVisitor)?;
+        let content = deserializer.deserialize_string(MultilineStringVisitor)?;
         Ok(Self { content })
     }
 }

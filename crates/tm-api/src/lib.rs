@@ -4,6 +4,7 @@ use reqwest::header::CONTENT_ENCODING;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
+use std::num::NonZeroI32;
 
 mod post;
 pub mod thread;
@@ -24,7 +25,7 @@ pub enum ApiError {
     /// * 0: `status` field in reply.
     /// * 1: `message` the error message in reply.
     #[error("server responded an error: status={0:?}, message={1:?}")]
-    ServerRespError(i32, String),
+    ServerRespError(NonZeroI32, String),
 }
 
 /// Represents the common format of the response when server replied an error>
@@ -39,7 +40,7 @@ pub enum ApiError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ErrorResponse {
     /// Status code considered to be non-zero, indicating error happened.
-    status: i32,
+    status: NonZeroI32,
 
     /// Error message.
     message: Option<String>,
