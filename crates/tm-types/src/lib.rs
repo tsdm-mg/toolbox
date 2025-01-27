@@ -8,8 +8,11 @@ pub const BASE_URL: &str = "https://tsdm39.com";
 
 /// Platforms the content publisher currently using.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
-#[repr(u32)]
+#[repr(i32)]
 pub enum Platform {
+    /// Mobile web UI.
+    WebMobile = -1,
+
     /// Not specialized.
     Unknown = 0,
 
