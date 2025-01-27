@@ -10,6 +10,9 @@ pub const BASE_URL: &str = "https://tsdm39.com";
 #[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u32)]
 pub enum Platform {
+    /// Not specialized.
+    Unknown = 0,
+
     /// Android platform
     ///
     /// Most commonly used.

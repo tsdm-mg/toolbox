@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tm_types::{MultilineString, Platform};
+use tm_types::Platform;
 
 /// Post in thread.
 ///
@@ -30,7 +30,8 @@ pub struct Post {
     /// Title of author.
     ///
     /// HTML text.
-    author_title: MultilineString,
+    #[serde(rename = "authortitle")]
+    author_title: String,
 
     /// Title of author.
     ///
@@ -54,7 +55,7 @@ pub struct Post {
     ///
     /// HTML text.
     #[serde(rename = "message")]
-    body: MultilineString,
+    body: String,
 
     /// Is first floor or not.
     ///

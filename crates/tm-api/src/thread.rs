@@ -13,7 +13,7 @@ use tracing::{debug, trace};
 pub struct Thread {
     /// Thread subject.
     #[serde(rename = "subject")]
-    title: u32,
+    title: String,
 
     /// Fetched post.
     #[serde(rename = "postlist")]
@@ -25,7 +25,7 @@ pub struct Thread {
 
     /// Post count in each page if page is fulfilled.
     #[serde(rename = "tpp")]
-    post_per_page: u32,
+    post_per_page: String,
 
     /// ID of subreddit the thread currently in.
     #[serde(rename = "fid")]
@@ -40,8 +40,8 @@ pub struct Thread {
     author_id: u32,
 
     /// Current author is the moderator of current thread or not.
-    #[serde(rename = "is_moderator")]
-    moderator: String,
+    #[serde(rename = "ismoderator")]
+    moderator: u32,
 
     /// Price of the thread, if any.
     #[serde(rename = "thread_price")]
@@ -75,7 +75,7 @@ pub async fn fetch_thread_content(tid: u32, page: u32) -> Result<Thread> {
     let thread_data = decompress_response_to_string(resp)
         .await
         .context("when parsing thread data")?
-        .replace("\u{000D}", "XXXXXXXXXXXXXX")
+        .replace("\u{000D}", "")
         .replace("\u{000A}", "YYYYYYYY");
 
     // Check if error occurred.
