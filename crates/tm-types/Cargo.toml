@@ -9,4 +9,4 @@ description = "Definition of common types"
 
 [dependencies]
 serde.workspace = true
-serde_repr.workspace = true
+tracing.workspace = true

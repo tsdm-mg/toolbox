@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tm_types::Platform;
+use tm_types::PlatformValue;
 
 /// Post in thread.
 ///
@@ -67,5 +67,8 @@ pub struct Post {
     floor: u32,
 
     /// User platform.
-    platform: Platform,
+    ///
+    /// Use the wrapper type [PlatformValue] to hold the value and parse to `Platform` when needed.
+    /// See [PlatformValue] for details.
+    platform: PlatformValue,
 }
