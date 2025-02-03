@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tm_types::BASE_URL;
+use tm_types::{PostPerPageValue, BASE_URL};
 use tracing::{debug, trace};
 
 /// Thread model
@@ -25,7 +25,7 @@ pub struct Thread {
 
     /// Post count in each page if page is fulfilled.
     #[serde(rename = "tpp")]
-    pub post_per_page: String,
+    pub post_per_page: PostPerPageValue,
 
     /// ID of subreddit the thread currently in.
     #[serde(rename = "fid")]

@@ -1,8 +1,8 @@
+use crate::parse::run_parse_command;
 use crate::thread::run_thread_command;
 use anyhow::Result;
 use clap::ArgAction;
 use clap::{Args, Parser, Subcommand};
-
 ///////// Args /////////
 
 #[derive(Clone, Debug, Args)]
@@ -35,6 +35,12 @@ pub struct ThreadArgs {
     pub output: Option<String>,
 }
 
+#[derive(Clone, Debug, Args)]
+pub struct ParseArgs {
+    #[arg(help = "File path to parse content")]
+    pub file: String,
+}
+
 ///////// Subcommand /////////
 
 #[derive(Clone, Debug, Parser)]
@@ -47,11 +53,15 @@ pub struct Cli {
 pub enum Command {
     #[command(about = "fetch content in thread.")]
     Thread(ThreadArgs),
+
+    #[command(about = "parse data from file")]
+    Parse(ParseArgs),
 }
 
 /// Main entry of all subcommands.
 pub async fn run_command_with_args(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Thread(thread_args) => run_thread_command(thread_args).await,
+        Command::Parse(parse_args) => run_parse_command(parse_args).await,
     }
 }

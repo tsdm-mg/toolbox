@@ -6,6 +6,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod cmd;
+mod parse;
 mod thread;
 mod utils;
 

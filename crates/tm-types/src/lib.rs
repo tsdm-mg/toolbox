@@ -65,3 +65,22 @@ impl PlatformValue {
         }
     }
 }
+
+/// Wrapper type for platform field in post data.
+///
+/// Same reason as [PlatformValue]. See [PlatformValue] for details.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum PostPerPageValue {
+    IntValue(u32),
+    StringValue(String),
+}
+
+impl PostPerPageValue {
+    pub fn value(&self) -> String {
+        match self {
+            PostPerPageValue::IntValue(v) => v.to_string(),
+            PostPerPageValue::StringValue(v) => v.clone(),
+        }
+    }
+}

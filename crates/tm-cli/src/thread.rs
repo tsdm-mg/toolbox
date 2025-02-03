@@ -104,7 +104,7 @@ async fn download_single_page(output_file: PathBuf, tid: u32, page: u32) -> Resu
         output_file.as_path()
     );
 
-    let post_per_page = content.post_per_page.parse::<u32>().unwrap_or(1);
+    let post_per_page = content.post_per_page.value().parse::<u32>().unwrap_or(1);
     let totals = content.total_post.parse::<u32>().unwrap_or(0);
 
     fs::write(
