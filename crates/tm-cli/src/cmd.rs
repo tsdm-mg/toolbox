@@ -1,28 +1,51 @@
 use crate::thread::run_thread_command;
 use anyhow::Result;
+use clap::ArgAction;
 use clap::{Args, Parser, Subcommand};
 
 ///////// Args /////////
 
 #[derive(Clone, Debug, Args)]
-pub(crate) struct ThreadArgs {
-    #[arg(help = "Thread id")]
-    pub(crate) tid: u32,
+pub struct ThreadArgs {
+    #[arg(short = 't', long = "tid", help = "Thread id to fetch.")]
+    pub tid: u32,
 
-    #[arg(help = "Page number", default_value = "1")]
-    pub(crate) page: u32,
+    #[arg(
+        short = 'p',
+        long = "page",
+        help = "Page number to fetch, single number value.",
+        default_value = "1"
+    )]
+    pub page: u32,
+
+    #[arg(
+        short = 'a',
+        long = "all",
+        help = "All pages. Override -p/--page when presents.",
+        default_value = "false",
+        action = ArgAction::SetTrue,
+    )]
+    pub all: Option<bool>,
+
+    #[arg(
+        short = 'o',
+        long = "output",
+        help = "Directory to save fetched content."
+    )]
+    pub output: Option<String>,
 }
 
 ///////// Subcommand /////////
 
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Cli {
+pub struct Cli {
     #[command(subcommand)]
-    pub(crate) command: Command,
+    pub command: Command,
 }
 
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum Command {
+pub enum Command {
+    #[command(about = "fetch content in thread.")]
     Thread(ThreadArgs),
 }
 

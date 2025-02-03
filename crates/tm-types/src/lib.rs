@@ -42,28 +42,26 @@ impl PlatformValue {
     #[tracing::instrument]
     pub fn platform(&self) -> Platform {
         match self {
-            PlatformValue::StringValue(v) =>
-                match v.as_str() {
-                    "-1" => Platform::WebMobile,
-                    "0" => Platform::Unknown,
-                    "1" => Platform::Android,
-                    "2" => Platform::Ios,
-                    v => {
-                        warn!("unknown platform string value {v}, fallback to unknown");
-                        Platform::Unknown
-                    }
-                },
-            PlatformValue::IntValue(v) =>
-                match v {
-                    -1 => Platform::WebMobile,
-                    0 => Platform::Unknown,
-                    1 => Platform::Android,
-                    2 => Platform::Ios,
-                    v => {
-                        warn!("unknown platform i32 value {v}, fallback to unknown");
-                        Platform::Unknown
-                    }
+            PlatformValue::StringValue(v) => match v.as_str() {
+                "-1" => Platform::WebMobile,
+                "0" => Platform::Unknown,
+                "1" => Platform::Android,
+                "2" => Platform::Ios,
+                v => {
+                    warn!("unknown platform string value {v}, fallback to unknown");
+                    Platform::Unknown
                 }
+            },
+            PlatformValue::IntValue(v) => match v {
+                -1 => Platform::WebMobile,
+                0 => Platform::Unknown,
+                1 => Platform::Android,
+                2 => Platform::Ios,
+                v => {
+                    warn!("unknown platform i32 value {v}, fallback to unknown");
+                    Platform::Unknown
+                }
+            },
         }
     }
 }

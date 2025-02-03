@@ -1,6 +1,8 @@
 /target
 /.idea
 /.vscode
+# Dir for test
+/fetched_thread_*
 *.orig
 *.rej
 *.swp

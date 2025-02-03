@@ -5,6 +5,7 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 description = "APIs used in tsdm"
+rust-version.workspace = true
 
 [dependencies]
 tm-types.workspace = true

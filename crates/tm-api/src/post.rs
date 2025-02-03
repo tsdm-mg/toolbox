@@ -15,60 +15,60 @@ use tm_types::PlatformValue;
 pub struct Post {
     /// Post id.
     #[serde(rename = "pid")]
-    id: String,
+    pub id: String,
 
     /// Author name.
-    author: String,
+    pub author: String,
 
     /// Uid of `author`.
     #[serde(rename = "authorid")]
-    author_id: String,
+    pub author_id: String,
 
     /// Author avatar url.
-    avatar: String,
+    pub avatar: String,
 
     /// Title of author.
     ///
     /// HTML text.
     #[serde(rename = "authortitle")]
-    author_title: String,
+    pub author_title: String,
 
     /// Title of author.
     ///
     /// HTML text.
     #[serde(rename = "authorgid")]
-    author_group_id: String,
+    pub author_group_id: String,
 
     /// Nickname of author.
-    author_nickname: String,
+    pub author_nickname: String,
 
     /// Timestamp in second.
-    timestamp: String,
+    pub timestamp: String,
 
     /// Optional post subject.
     ///
     /// TIPS: Seems only with the first floor.
     #[serde(rename = "subject")]
-    title: Option<String>,
+    pub title: Option<String>,
 
     /// Post body.
     ///
     /// HTML text.
     #[serde(rename = "message")]
-    body: String,
+    pub body: String,
 
     /// Is first floor or not.
     ///
     /// "1" for true, other for false.
     #[serde(rename = "first")]
-    first_floor: String,
+    pub first_floor: String,
 
     /// Floor number.
-    floor: u32,
+    pub floor: u32,
 
     /// User platform.
     ///
     /// Use the wrapper type [PlatformValue] to hold the value and parse to `Platform` when needed.
     /// See [PlatformValue] for details.
-    platform: PlatformValue,
+    pub platform: PlatformValue,
 }

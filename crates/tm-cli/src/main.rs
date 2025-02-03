@@ -7,8 +7,9 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod cmd;
 mod thread;
+mod utils;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     let env_filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::OFF.into())

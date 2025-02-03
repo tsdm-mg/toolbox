@@ -13,49 +13,49 @@ use tracing::{debug, trace};
 pub struct Thread {
     /// Thread subject.
     #[serde(rename = "subject")]
-    title: String,
+    pub title: String,
 
     /// Fetched post.
     #[serde(rename = "postlist")]
-    post_list: Vec<Post>,
+    pub post_list: Vec<Post>,
 
     /// All post count in the thread.
     #[serde(rename = "totalpost")]
-    total_post: String,
+    pub total_post: String,
 
     /// Post count in each page if page is fulfilled.
     #[serde(rename = "tpp")]
-    post_per_page: String,
+    pub post_per_page: String,
 
     /// ID of subreddit the thread currently in.
     #[serde(rename = "fid")]
-    forum_id: String,
+    pub forum_id: String,
 
     /// Username of author.
     #[serde(rename = "thread_author")]
-    author: String,
+    pub author: String,
 
     /// UID of author.
     #[serde(rename = "thread_authorid")]
-    author_id: u32,
+    pub author_id: u32,
 
     /// Current author is the moderator of current thread or not.
     #[serde(rename = "ismoderator")]
-    moderator: u32,
+    pub moderator: u32,
 
     /// Price of the thread, if any.
     #[serde(rename = "thread_price")]
-    price: String,
+    pub price: String,
 
     /// User already purchased the thread or not.
     #[serde(rename = "thread_paid")]
-    paid: u32,
+    pub paid: u32,
 
     /// All user points name and id.
     ///
     /// Most points are not dynamic but parse it for safety.
     #[serde(rename = "extcreditsname")]
-    points_map: HashMap<String, String>,
+    pub points_map: HashMap<String, String>,
 }
 
 // TODO: Some steps in this function are common steps in all APIs, extract them when completed.
