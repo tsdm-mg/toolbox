@@ -1,0 +1,39 @@
+stage = "Ending"
+current_data_path = "path_to_current_data"
+
+[reward_policy.complete]
+ww = 50
+tsb = 100
+energy = 2
+credit = 10
+[reward_policy.missing1]
+ww = 40
+tsb = 80
+energy = 0
+credit = 0
+[reward_policy.missing2]
+ww = 30
+tsb = 60
+energy = 0
+credit = 0
+
+[round."第一轮"]
+"初赛A组" = "path_to_dir"
+"初赛B组" = "path_to_dir"
+"初赛C组" = "path_to_dir"
+"初赛D组" = "path_to_dir"
+"初赛结果" = "path_to_dir"
+[round."第二轮"]
+"四分之一决赛第1组" = "path_to_dir"
+"四分之一决赛第2组" = "path_to_dir"
+"四分之一决赛第3组" = "path_to_dir"
+"四分之一决赛第4组" = "path_to_dir"
+"四分之一决赛结果" = "path_to_dir"
+[round."第三轮"]
+"半决赛第1组" = "path_to_dir"
+"半决赛第2组" = "path_to_dir"
+"排位赛第一场" = "path_to_dir"
+"半决赛结果" = "path_to_dir"
+[round."第四轮"]
+"总决赛" = "path_to_dir"
+"排位赛第二场" = "path_to_dir"
