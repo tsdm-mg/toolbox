@@ -112,7 +112,7 @@ async fn download_single_page(output_file: PathBuf, tid: u32, page: u32) -> Resu
         serde_json::to_string_pretty(&content).context("when serializing thread content")?,
     )
     .await
-    .context(format!("when saving for thread {tid} page {page}"))?;
+    .with_context(|| format!("when saving for thread {tid} page {page}"))?;
 
     Ok((post_per_page, totals))
 }

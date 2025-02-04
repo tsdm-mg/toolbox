@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::num::NonZeroI32;
 
-mod post;
+pub mod post;
 pub mod thread;
 
 #[derive(Clone, Debug, thiserror::Error)]
