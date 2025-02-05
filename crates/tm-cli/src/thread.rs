@@ -66,7 +66,8 @@ pub async fn run_thread_command(args: ThreadArgs) -> Result<()> {
             if post_per_page == 0 {
                 total_pages = 1;
             } else {
-                total_pages = total_post.div_ceil(post_per_page);
+                // One more total posts because the first floor not included in post count.
+                total_pages = (total_post + 1).div_ceil(post_per_page);
             }
 
             sleep(Duration::from_millis(700)).await;
