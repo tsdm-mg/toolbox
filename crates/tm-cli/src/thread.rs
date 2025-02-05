@@ -25,7 +25,7 @@ pub async fn run_thread_command(args: ThreadArgs) -> Result<()> {
         .as_str()
         {
             "y" | "Y" => true,
-            _ => false,
+            v => false,
         };
         if !should_delete {
             println!("ok, do not delete it. Exit");
@@ -34,7 +34,7 @@ pub async fn run_thread_command(args: ThreadArgs) -> Result<()> {
 
         println!("delete dir {output_dir_raw_path}");
         if output_dir_path.is_dir() {
-            fs::remove_dir(&output_dir_path)
+            fs::remove_dir_all(&output_dir_path)
                 .await
                 .context("when removing output dir")?;
         } else {

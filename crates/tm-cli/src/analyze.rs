@@ -2,8 +2,10 @@ use crate::cmd::AnalyzeArgs;
 use crate::utils::parallel_future;
 use anyhow::{anyhow, Context, Result};
 use regex::Regex;
+use scraper::node::Element;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter::Filter;
 use std::path::PathBuf;
@@ -563,7 +565,8 @@ fn produce_participation_result(
     flags_template: Vec<ThreadFlag>,
 ) -> Vec<UserParticipation> {
     let link_selector = Selector::parse("a").expect("invalid link selector");
-    let link_re = Regex::new(r#"forum\.php\?mod=redirect((&amp;)|(&))+goto=findpost((&amp;)|(&))+ptid=(?<tid>\d+)((&amp;)|(&))+pid=(?<pid>\d+)"#).expect("invalid registration link format regex");
+    let find_post_re = Regex::new(r#"forum\.php\?mod=redirect((&amp;)|(&))+goto=findpost((&amp;)|(&))+ptid=(?<tid>\d+)((&amp;)|(&))+pid=(?<pid>\d+)"#).expect("invalid registration link find post regex");
+    let view_post_re = Regex::new(r#"forum\.php\?mod=viewthread((&amp;)|(&))+.*tid=(?<tid>\d+)((&amp;)|(&))+.*#pid(?<pid>\d+)$"#).expect("invalid registration link view post regex");
 
     let mut analyze_result = Vec::with_capacity(reg_data.len());
 
@@ -590,7 +593,7 @@ fn produce_participation_result(
 
             // Traverse and check all `a` tags.
             let doc = Html::parse_fragment(reg.body.as_str());
-            for node in doc.select(&link_selector) {
+            for (idx, node) in doc.select(&link_selector).enumerate() {
                 let link = match node.value().attr("href") {
                     Some(v) => v,
                     None => continue,
@@ -602,6 +605,20 @@ fn produce_participation_result(
                 // but always contains that one.
                 let thread_name = match node.prev_sibling() {
                     Some(v) if v.value().is_text() => v.value().as_text().unwrap().to_string(),
+                    Some(v) if v.value().is_element() => {
+                        // Look back one br tag.
+                        let prev = v.value().as_element().unwrap();
+                        if prev.name() != "br" {
+                            continue;
+                        }
+
+                        match v.prev_sibling() {
+                            Some(prev_prev) if prev_prev.value().is_text() => {
+                                prev_prev.value().as_text().unwrap().to_string()
+                            }
+                            _ => continue,
+                        }
+                    }
                     _ => continue,
                 };
                 trace!("validating thread_name={}", thread_name);
@@ -635,7 +652,10 @@ fn produce_participation_result(
                 //
                 // * If so, check passed.
                 // * If not, generate info about missing round.
-                let capture = match link_re.captures(link) {
+                let capture = match find_post_re
+                    .captures(link)
+                    .or_else(|| view_post_re.captures(link))
+                {
                     Some(v) => v,
                     None => {
                         trace!("link re not matched on link: {link}");
@@ -665,8 +685,6 @@ fn produce_participation_result(
                     };
                 trace!("updating a target_thread_flag={:?}", target_thread_flag);
             }
-            let x: Filter<Iter<'_, ThreadFlag>, _> =
-                flags.iter().filter(|x| x.flag == Participation::Ok);
 
             // Traverse finish, produce result for the user.
             analyze_result.push(UserParticipation {
@@ -689,6 +707,16 @@ fn produce_participation_result(
     analyze_result
 }
 
+fn sort_user_participation(lhs: &UserParticipation, rhs: &UserParticipation) -> Ordering {
+    if lhs.floor < rhs.floor {
+        Ordering::Less
+    } else if lhs.floor > rhs.floor {
+        Ordering::Greater
+    } else {
+        Ordering::Equal
+    }
+}
+
 fn produce_analyze_result(user_participation: Vec<UserParticipation>) -> AnalyzeResult {
     let mut analyze_result = AnalyzeResult::new();
 
@@ -701,6 +729,12 @@ fn produce_analyze_result(user_participation: Vec<UserParticipation>) -> Analyze
             4.. => analyze_result.missing4.push(p),
         }
     }
+
+    analyze_result.complete.sort_by(sort_user_participation);
+    analyze_result.missing1.sort_by(sort_user_participation);
+    analyze_result.missing2.sort_by(sort_user_participation);
+    analyze_result.missing3.sort_by(sort_user_participation);
+    analyze_result.missing4.sort_by(sort_user_participation);
 
     analyze_result
 }

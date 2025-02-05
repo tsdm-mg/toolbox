@@ -17,6 +17,9 @@ pub fn read_line(hint: impl Into<String>) -> io::Result<String> {
     if result.ends_with('\n') {
         result.pop();
     }
+    if result.ends_with('\r') {
+        result.pop();
+    }
     Ok(result)
 }
 
