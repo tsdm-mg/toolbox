@@ -5,11 +5,13 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::iter::Filter;
 use std::path::PathBuf;
+use std::slice::Iter;
 use tm_api::post::Post as PostModel;
 use tm_api::thread::Thread as ThreadModel;
 use tokio::fs;
-use tracing::{debug, trace};
+use tracing::{debug, trace, Instrument};
 
 /// Moe stages.
 ///
@@ -252,16 +254,16 @@ struct UserParticipation {
     uid: String,
 
     /// Post floor number in registration thread.
-    post: u32,
+    floor: u32,
 
     /// Threads participated with the correct action.
-    ok: Vec<ThreadFlag>,
+    ok: HashMap<String, Vec<ThreadFlag>>,
 
     /// Threads missed.
-    missed: Vec<ThreadFlag>,
+    missed: HashMap<String, Vec<ThreadFlag>>,
 
     /// Threads user intend to register an incorrect post.
-    incorrect: Vec<ThreadFlag>,
+    incorrect: HashMap<String, Vec<ThreadFlag>>,
 }
 
 impl UserParticipation {
@@ -271,26 +273,34 @@ impl UserParticipation {
 
     fn generate_rounds(&self, indent: usize) -> String {
         let mut result = String::new();
-        for thread in self.missed.iter() {
+        for (round, threads) in self.missed.iter() {
             result.push_str(
                 format!(
                     "{}missed {} {}\n",
                     " ".repeat(indent),
-                    thread.round,
-                    thread.name
+                    round,
+                    threads
+                        .iter()
+                        .map(|x| x.name.to_owned())
+                        .collect::<Vec<_>>()
+                        .join(" "),
                 )
-                    .as_str(),
+                .as_str(),
             );
         }
-        for thread in self.incorrect.iter() {
+        for (round, threads) in self.incorrect.iter() {
             result.push_str(
                 format!(
                     "{}incorrect {} {}\n",
                     " ".repeat(indent),
-                    thread.round,
-                    thread.name
+                    round,
+                    threads
+                        .iter()
+                        .map(|x| x.name.to_owned())
+                        .collect::<Vec<_>>()
+                        .join(" "),
                 )
-                    .as_str(),
+                .as_str(),
             );
         }
         result
@@ -342,49 +352,75 @@ impl AnalyzeResult {
                 "Total users: {}\n",
                 complete_count + missing1_count + missing2_count + missing3_count + missing4_count
             )
-                .as_str(),
+            .as_str(),
         );
         if complete_count > 0 {
-            result.push_str(format!("Users complete all rounds (): {complete_count}\n").as_str());
+            result.push_str(format!("Users complete all rounds: {complete_count}\n").as_str());
             for p in self.complete.iter() {
-                result.push_str(format!("  {}({})\n", p.username, p.uid).as_str());
+                result.push_str(format!("  {}({} #{})\n", p.username, p.uid, p.floor).as_str());
             }
         }
 
         if missing1_count > 0 {
-            result.push_str(format!("Users missing 1 round (): {missing1_count}\n").as_str());
+            result.push_str(format!("Users missing 1 round: {missing1_count}\n").as_str());
             for p in self.missing1.iter() {
                 result.push_str(
-                    format!("  {}({})\n{}", p.username, p.uid, p.generate_rounds(6)).as_str(),
+                    format!(
+                        "  {}({} #{})\n{}",
+                        p.username,
+                        p.uid,
+                        p.floor,
+                        p.generate_rounds(4)
+                    )
+                    .as_str(),
                 );
             }
         }
 
         if missing2_count > 0 {
-            result.push_str(format!("Users missing 2 rounds (): {missing2_count}\n").as_str());
+            result.push_str(format!("Users missing 2 rounds: {missing2_count}\n").as_str());
             for p in self.missing2.iter() {
                 result.push_str(
-                    format!("  {}({})\n{}", p.username, p.uid, p.generate_rounds(6)).as_str(),
+                    format!(
+                        "  {}({} #{})\n{}",
+                        p.username,
+                        p.uid,
+                        p.floor,
+                        p.generate_rounds(4)
+                    )
+                    .as_str(),
                 );
             }
         }
 
         if missing3_count > 0 {
-            result.push_str(format!("Users missing 3 rounds (): {missing3_count}\n").as_str());
+            result.push_str(format!("Users missing 3 rounds: {missing3_count}\n").as_str());
             for p in self.missing3.iter() {
                 result.push_str(
-                    format!("  {}({})\n{}", p.username, p.uid, p.generate_rounds(6)).as_str(),
+                    format!(
+                        "  {}({} #{})\n{}",
+                        p.username,
+                        p.uid,
+                        p.floor,
+                        p.generate_rounds(4)
+                    )
+                    .as_str(),
                 );
             }
         }
 
         if missing4_count > 0 {
-            result.push_str(
-                format!("Users missing 4 or more rounds (): {missing4_count}\n").as_str(),
-            );
+            result.push_str(format!("Users missing 4 or more rounds: {missing4_count}\n").as_str());
             for p in self.missing4.iter() {
                 result.push_str(
-                    format!("  {}({})\n{}", p.username, p.uid, p.generate_rounds(6)).as_str(),
+                    format!(
+                        "  {}({} #{})\n{}",
+                        p.username,
+                        p.uid,
+                        p.floor,
+                        p.generate_rounds(4)
+                    )
+                    .as_str(),
                 );
             }
         }
@@ -435,14 +471,14 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
                 Ok(result)
             }
         })
-            .await;
+        .await;
         result
     })
-        .await?
-        .into_iter()
-        .flatten()
-        .flatten()
-        .collect::<Vec<_>>();
+    .await?
+    .into_iter()
+    .flatten()
+    .flatten()
+    .collect::<Vec<_>>();
 
     println!(
         "loaded reg_data, post count {}",
@@ -536,7 +572,12 @@ fn produce_participation_result(
         trace!("traversing registration data page={}", reg_page_number);
         // Each reg is a post in the registration thread, where one user registered.
         for reg in reg_page.thread.post_list.into_iter() {
-            trace!("traversing registration data floor={}, user={}, uid={}", reg.floor, reg.author, reg.author_id);
+            trace!(
+                "traversing registration data floor={}, user={}, uid={}",
+                reg.floor,
+                reg.author,
+                reg.author_id
+            );
             if reg.floor == 1 {
                 trace!("skip the first floor");
                 // Skip the first floor, it is the announcement.
@@ -612,7 +653,11 @@ fn produce_participation_result(
                             if v.author_id == reg.author_id {
                                 Participation::Ok
                             } else {
-                                trace!("incorrect registration on author_id: expected: {}, got {}", reg.author_id, v.author_id);
+                                trace!(
+                                    "incorrect registration on author_id: expected: {}, got {}",
+                                    reg.author_id,
+                                    v.author_id
+                                );
                                 Participation::Incorrect
                             }
                         }
@@ -620,28 +665,23 @@ fn produce_participation_result(
                     };
                 trace!("updating a target_thread_flag={:?}", target_thread_flag);
             }
+            let x: Filter<Iter<'_, ThreadFlag>, _> =
+                flags.iter().filter(|x| x.flag == Participation::Ok);
 
             // Traverse finish, produce result for the user.
-
             analyze_result.push(UserParticipation {
                 username: reg.author,
                 uid: reg.author_id,
-                post: reg.floor,
-                ok: flags
-                    .iter()
-                    .filter(|x| x.flag == Participation::Ok)
-                    .map(|x| x.to_owned())
-                    .collect(),
-                missed: flags
-                    .iter()
-                    .filter(|x| x.flag == Participation::Missed)
-                    .map(|x| x.to_owned())
-                    .collect(),
-                incorrect: flags
-                    .iter()
-                    .filter(|x| x.flag == Participation::Incorrect)
-                    .map(|x| x.to_owned())
-                    .collect(),
+                floor: reg.floor,
+                ok: group_thread_flag_by_round(
+                    flags.iter().filter(|x| x.flag == Participation::Ok),
+                ),
+                missed: group_thread_flag_by_round(
+                    flags.iter().filter(|x| x.flag == Participation::Missed),
+                ),
+                incorrect: group_thread_flag_by_round(
+                    flags.iter().filter(|x| x.flag == Participation::Incorrect),
+                ),
             });
         }
     }
@@ -663,4 +703,18 @@ fn produce_analyze_result(user_participation: Vec<UserParticipation>) -> Analyze
     }
 
     analyze_result
+}
+
+fn group_thread_flag_by_round(
+    filter: Filter<Iter<'_, ThreadFlag>, fn(&&ThreadFlag) -> bool>,
+) -> HashMap<String, Vec<ThreadFlag>> {
+    let mut map = HashMap::<String, Vec<ThreadFlag>>::new();
+    for element in filter {
+        if let Some(v) = map.get_mut(element.round.as_str()) {
+            (*v).push(element.to_owned());
+        } else {
+            map.insert(element.round.clone(), vec![element.to_owned()]);
+        }
+    }
+    map
 }
