@@ -25,6 +25,7 @@ clap = { version = "4.5.27", features = ["derive"] }
 chrono = "0.4.39"
 flate2 = "1.0.35"
 futures = "0.3.31"
+regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 scraper = "0.22.0"
 serde = { version = "1.0.217", features = ["derive"] }
