@@ -50,6 +50,9 @@ pub struct AnalyzeArgs {
         help = "Path to the config file defining analyze configuration"
     )]
     pub config: String,
+
+    #[arg(long = "csv", help = "Path to output csv format analyze result")]
+    pub csv: Option<String>,
 }
 
 ///////// Subcommand /////////

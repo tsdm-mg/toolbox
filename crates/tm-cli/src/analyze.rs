@@ -7,6 +7,7 @@ use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
 use std::iter::Filter;
 use std::path::PathBuf;
 use std::slice::Iter;
@@ -14,6 +15,7 @@ use tm_api::post::Post as PostModel;
 use tm_api::thread::Thread as ThreadModel;
 use tokio::fs;
 use tracing::{debug, trace, Instrument};
+use tracing_subscriber::fmt::format;
 
 /// Moe stages.
 ///
@@ -30,7 +32,7 @@ enum Stage {
 /// Reward to apply
 ///
 /// Some special kinds of reward not listed here because they are mysterious.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct Reward {
     /// Points ww.
     ww: i32,
@@ -43,6 +45,43 @@ struct Reward {
 
     /// Moe credit.
     credit: i32,
+}
+
+impl Reward {
+    /// Generate the reward text.
+    fn generate_reward_text(&self) -> String {
+        let ww = if self.ww > 0 {
+            Some(format!("{}ww", self.ww))
+        } else {
+            None
+        };
+
+        let tsb = if self.tsb > 0 {
+            Some(format!("{}tsb", self.tsb))
+        } else {
+            None
+        };
+
+        let energy = if self.energy > 0 {
+            Some(format!("{}能量值", self.energy))
+        } else {
+            None
+        };
+
+        let credit = if self.credit > 0 {
+            Some(format!("{}积分", self.credit))
+        } else {
+            None
+        };
+
+        let reward = [ww, tsb, energy, credit]
+            .into_iter()
+            .filter_map(|x| if x.is_some() { Some(x.unwrap()) } else { None })
+            .collect::<Vec<_>>()
+            .join(" + ");
+
+        reward
+    }
 }
 
 /// Describe how to calculate reward for all users according to their poll and registration state.
@@ -60,27 +99,45 @@ struct Reward {
 #[derive(Debug, Serialize, Deserialize)]
 struct RewardPolicy {
     /// Reward apply on users participated in all rounds.
-    complete: Option<Reward>,
+    #[serde(default)]
+    complete: Reward,
 
     /// Reward apply on users participated in one fewer round.
     ///
     /// Both in [Stage::Season] and [Stage::Ending].
-    missing1: Option<Reward>,
+    #[serde(default)]
+    missing1: Reward,
 
     /// Reward apply on users participated in two fewer rounds.
     ///
     /// Both in [Stage::Season] and [Stage::Ending].
-    missing2: Option<Reward>,
+    #[serde(default)]
+    missing2: Reward,
 
     /// Reward apply on users participated in tree fewer rounds.
     ///
     /// Only in [Stage::Ending].
-    missing3: Option<Reward>,
+    #[serde(default)]
+    missing3: Reward,
 
     /// Reward apply on users participated in four fewer rounds.
     ///
     /// Only in [Stage::Ending].
-    missing4: Option<Reward>,
+    #[serde(default)]
+    missing4: Reward,
+}
+
+impl RewardPolicy {
+    /// Generate reward description according to the count of missing rounds.
+    fn generate_reward_text(&self, missing_rounds: usize) -> String {
+        match missing_rounds {
+            0 => self.complete.generate_reward_text(),
+            1 => self.missing1.generate_reward_text(),
+            2 => self.missing2.generate_reward_text(),
+            3 => self.missing3.generate_reward_text(),
+            4.. => self.missing4.generate_reward_text(),
+        }
+    }
 }
 
 /// Thread config.
@@ -307,6 +364,32 @@ impl UserParticipation {
         }
         result
     }
+
+    /// Count rounds that not completedly participated in.
+    fn count_not_ok(&self) -> usize {
+        self.missed.iter().len() + self.incorrect.len()
+    }
+
+    /// Generate a single record.
+    fn generate_csv_record(&self, reward_policy: &RewardPolicy) -> Vec<String> {
+        let pat = match self.count_not_ok() {
+            0 => "全过程",
+            1 => "少一轮",
+            2 => "少两轮",
+            3 => "少三轮",
+            4.. => "少四轮",
+        };
+
+        vec![
+            self.floor.to_string(),
+            self.username.clone(),
+            self.uid.to_string(),
+            pat.to_string(),
+            reward_policy.generate_reward_text(self.count_not_ok()),
+            String::new(),
+            self.generate_rounds(0).trim().to_string(),
+        ]
+    }
 }
 
 /// Produced result on user participation.
@@ -340,6 +423,7 @@ impl AnalyzeResult {
             missing4: vec![],
         }
     }
+
     fn generate_text_result(&self) -> String {
         let mut result = String::new();
 
@@ -429,6 +513,35 @@ impl AnalyzeResult {
 
         result
     }
+
+    /// Generate csv format text result.
+    ///
+    /// ## Columns
+    ///
+    /// * Floor
+    /// * ID
+    /// * UID
+    /// * Participation
+    /// * Reward
+    /// * Signature link **not implemented yet**
+    /// * Tip **optional**
+    fn generate_csv_result(&self, reward_policy: &RewardPolicy) -> Vec<Vec<String>> {
+        let mut records = [
+            self.complete.as_slice(),
+            self.missing1.as_slice(),
+            self.missing2.as_slice(),
+            self.missing3.as_slice(),
+            self.missing4.as_slice(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        records.sort_by(sort_user_participation_ref);
+        records
+            .into_iter()
+            .map(|x| x.generate_csv_record(reward_policy))
+            .collect()
+    }
 }
 
 pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
@@ -505,6 +618,29 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
     let analyze_result = produce_analyze_result(participation_result);
 
     println!("{}", analyze_result.generate_text_result());
+
+    if let Some(csv_path) = args.csv {
+        println!("writing csv data to {csv_path}");
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(csv_path.clone())?;
+        let mut builder = csv::WriterBuilder::new()
+            .double_quote(true)
+            .from_writer(file);
+        for csv_record in analyze_result.generate_csv_result(&config.reward_policy) {
+            builder
+                .write_record(csv_record.as_slice())
+                .with_context(|| {
+                    format!("failed to write csv record \"{csv_record:?}\" to {csv_path}")
+                })?
+        }
+        builder
+            .flush()
+            .with_context(|| format!("failed to flush csv output file {csv_path}"))?;
+        println!("csv data saved in {csv_path}");
+    }
 
     Ok(())
 }
@@ -708,6 +844,16 @@ fn produce_participation_result(
 }
 
 fn sort_user_participation(lhs: &UserParticipation, rhs: &UserParticipation) -> Ordering {
+    if lhs.floor < rhs.floor {
+        Ordering::Less
+    } else if lhs.floor > rhs.floor {
+        Ordering::Greater
+    } else {
+        Ordering::Equal
+    }
+}
+
+fn sort_user_participation_ref(lhs: &&UserParticipation, rhs: &&UserParticipation) -> Ordering {
     if lhs.floor < rhs.floor {
         Ordering::Less
     } else if lhs.floor > rhs.floor {

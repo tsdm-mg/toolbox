@@ -23,6 +23,7 @@ tm-types = { path = "crates/tm-types" }
 anyhow = "1.0.95"
 clap = { version = "4.5.27", features = ["derive"] }
 chrono = "0.4.39"
+csv = "1.3.1"
 flate2 = "1.0.35"
 futures = "0.3.31"
 regex = "1.11.1"
