@@ -14,6 +14,7 @@ tm-types.workspace = true
 
 anyhow.workspace = true
 flate2.workspace = true
+racros.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 select.workspace = true

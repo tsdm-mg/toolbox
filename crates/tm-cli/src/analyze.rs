@@ -2,20 +2,18 @@ use crate::cmd::AnalyzeArgs;
 use crate::utils::parallel_future;
 use anyhow::{anyhow, Context, Result};
 use regex::Regex;
-use scraper::node::Element;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::iter::Filter;
 use std::path::PathBuf;
 use std::slice::Iter;
 use tm_api::post::Post as PostModel;
 use tm_api::thread::Thread as ThreadModel;
 use tokio::fs;
-use tracing::{debug, trace, Instrument};
-use tracing_subscriber::fmt::format;
+use tracing::trace;
 
 /// Moe stages.
 ///
@@ -273,21 +271,21 @@ impl LoadedThreadPage {
 /// "${THREAD_ID}_${PAGE_NUMBER}.json" format, thread id and page number shall be parsed and saved
 /// when loading data otherwise we lose those info forever.
 #[derive(Debug)]
-struct ThreadPageData {
+pub(crate) struct ThreadPageData {
     /// Thread id.
     ///
     /// Parsed from data file name.
-    tid: String,
+    pub tid: String,
 
     /// Page number.
     ///
     /// Parsed from data file name.
-    page: String,
+    pub page: String,
 
     /// Thread data.
     ///
     /// Deserialized from data file contents.
-    thread: ThreadModel,
+    pub thread: ThreadModel,
 }
 
 /// Enum represent participate state.
@@ -645,7 +643,7 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
     Ok(())
 }
 
-async fn load_thread_data_from_dir(path: &str) -> Result<Vec<ThreadPageData>> {
+pub(crate) async fn load_thread_data_from_dir(path: &str) -> Result<Vec<ThreadPageData>> {
     let mut dir = fs::read_dir(path)
         .await
         .with_context(|| format!("failed to read dir {path}"))?;

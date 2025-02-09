@@ -5,7 +5,6 @@ use crate::thread::run_thread_command;
 use anyhow::Result;
 use clap::ArgAction;
 use clap::{Args, Parser, Subcommand};
-use tracing::Instrument;
 ///////// Groups /////////
 
 #[derive(Clone, Debug, Args)]
@@ -16,6 +15,12 @@ pub struct ProfileTargetGroups {
 
     #[arg(long = "uid", help = "specify user by uid")]
     pub uid: Option<String>,
+
+    #[arg(
+        long = "download-reg",
+        help = "download all profiles in registration thread"
+    )]
+    pub download_reg: Option<String>,
 }
 
 ///////// Args /////////
@@ -73,6 +78,13 @@ pub struct AnalyzeArgs {
 pub struct ProfileArgs {
     #[command(flatten)]
     pub profile_target: ProfileTargetGroups,
+
+    #[arg(
+        short = 'o',
+        long = "output",
+        help = "Directory to save fetched content"
+    )]
+    pub output: Option<String>,
 }
 
 ///////// Subcommand /////////
