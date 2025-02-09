@@ -1,9 +1,23 @@
 use crate::analyze::run_analyze_command;
 use crate::parse::run_parse_command;
+use crate::profile::run_profile_command;
 use crate::thread::run_thread_command;
 use anyhow::Result;
 use clap::ArgAction;
 use clap::{Args, Parser, Subcommand};
+use tracing::Instrument;
+///////// Groups /////////
+
+#[derive(Clone, Debug, Args)]
+#[group(required = true, multiple = false)]
+pub struct ProfileTargetGroups {
+    #[arg(long = "name", help = "specify user by username")]
+    pub name: Option<String>,
+
+    #[arg(long = "uid", help = "specify user by uid")]
+    pub uid: Option<String>,
+}
+
 ///////// Args /////////
 
 #[derive(Clone, Debug, Args)]
@@ -55,6 +69,12 @@ pub struct AnalyzeArgs {
     pub csv: Option<String>,
 }
 
+#[derive(Clone, Debug, Args)]
+pub struct ProfileArgs {
+    #[command(flatten)]
+    pub profile_target: ProfileTargetGroups,
+}
+
 ///////// Subcommand /////////
 
 #[derive(Clone, Debug, Parser)]
@@ -73,6 +93,9 @@ pub enum Command {
 
     #[command(about = "analyze and produce statistics data")]
     Analyze(AnalyzeArgs),
+
+    #[command(about = "fetch user profile")]
+    Profile(ProfileArgs),
 }
 
 /// Main entry of all subcommands.
@@ -81,5 +104,6 @@ pub async fn run_command_with_args(cli: Cli) -> Result<()> {
         Command::Thread(thread_args) => run_thread_command(thread_args).await,
         Command::Parse(parse_args) => run_parse_command(parse_args).await,
         Command::Analyze(analyze_args) => run_analyze_command(analyze_args).await,
+        Command::Profile(profile_args) => run_profile_command(profile_args).await,
     }
 }

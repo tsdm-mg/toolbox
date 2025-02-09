@@ -3,6 +3,8 @@ members = [
     "crates/tm-api",
     "crates/tm-bbcode",
     "crates/tm-cli",
+    "crates/tm-html",
+    "crates/tm-macros",
     "crates/tm-types",
 ]
 resolver = "2"
@@ -18,6 +20,8 @@ rust-version = "1.73.0"
 
 [workspace.dependencies]
 tm-api = { path = "crates/tm-api" }
+tm-html = { path = "crates/tm-html" }
+tm-macros = { path = "crates/tm-macros" }
 tm-types = { path = "crates/tm-types" }
 
 anyhow = "1.0.95"
@@ -26,11 +30,15 @@ chrono = "0.4.39"
 csv = "1.3.1"
 flate2 = "1.0.35"
 futures = "0.3.31"
+proc-macro2 = "1.0.93"
+quote = "1.0.38"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 scraper = "0.22.0"
+select = "0.6.0"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.137", features = ["raw_value"] }
+syn = { version = "2.0.98", features = ["extra-traits"] }
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = ["full"] }
 toml = "0.8.19"

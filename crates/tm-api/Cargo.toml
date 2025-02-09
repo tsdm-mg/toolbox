@@ -8,13 +8,16 @@ description = "APIs used in tsdm"
 rust-version.workspace = true
 
 [dependencies]
+tm-html.workspace = true
+tm-macros = { workspace = true, features = ["selector"] }
 tm-types.workspace = true
 
 anyhow.workspace = true
 flate2.workspace = true
+regex.workspace = true
 reqwest.workspace = true
+select.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true

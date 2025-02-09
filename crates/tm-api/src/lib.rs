@@ -7,7 +7,9 @@ use std::io::Read;
 use std::num::NonZeroI32;
 
 pub mod post;
+pub mod profile;
 pub mod thread;
+mod utils;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ApiError {
