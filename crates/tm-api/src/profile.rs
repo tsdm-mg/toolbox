@@ -7,6 +7,7 @@ use regex::Regex;
 use reqwest::StatusCode;
 use select::document::Document;
 use select::predicate::{Attr, Class, Name, Predicate};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tm_html::HtmlElementExt;
 use tm_types::BASE_URL;
@@ -16,7 +17,7 @@ use tracing::{debug, trace};
 ///
 /// The fields listed here are those visitable to anyone visiting user profile. Fields requires
 /// user permission like ip address are excluded.
-#[derive(Clone, AutoDebug)]
+#[derive(Clone, AutoDebug, Deserialize, Serialize)]
 pub struct Profile {
     /// Url of user avatar.
     #[debug_debug_not_pretty]

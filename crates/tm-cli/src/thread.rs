@@ -1,5 +1,5 @@
 use crate::cmd::ThreadArgs;
-use crate::utils::read_line;
+use crate::utils::ask_delete_if_exists;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -17,32 +17,8 @@ pub async fn run_thread_command(args: ThreadArgs) -> Result<()> {
         .unwrap_or(format!("fetched_thread_{timestamp}",));
 
     let output_dir_path = PathBuf::from(output_dir_raw_path.as_str());
-    if output_dir_path.exists() {
-        let should_delete = match read_line(format!(
-            "Dir {output_dir_raw_path} already exists, delete it? [y/N]"
-        ))
-        .context("failed to ask output dir decision")?
-        .as_str()
-        {
-            "y" | "Y" => true,
-            v => false,
-        };
-        if !should_delete {
-            println!("ok, do not delete it. Exit");
-            return Ok(());
-        }
 
-        println!("delete dir {output_dir_raw_path}");
-        if output_dir_path.is_dir() {
-            fs::remove_dir_all(&output_dir_path)
-                .await
-                .context("when removing output dir")?;
-        } else {
-            fs::remove_file(&output_dir_path)
-                .await
-                .context("when removing output file")?;
-        }
-    }
+    ask_delete_if_exists(&output_dir_path).await?;
 
     fs::create_dir(&output_dir_path)
         .await

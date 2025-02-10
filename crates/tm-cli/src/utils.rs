@@ -1,8 +1,10 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::StreamExt;
 use std::future::Future;
 use std::io;
 use std::io::Write;
+use std::path::PathBuf;
+use tokio::fs;
 
 /// Read one line from stdin and strip the trailing '\n'.
 ///
@@ -47,4 +49,42 @@ where
         .into_iter()
         .collect::<Result<Vec<V>>>()?;
     Ok(ret)
+}
+
+/// If `path` exists, ask user to delete it.
+///
+/// ## Returns
+///
+/// * `Some(true)` if ok.
+/// * `Some(false)` if user reject to delete it.
+/// * `Err(_)` if any error occurred.
+pub(crate) async fn ask_delete_if_exists(path: &PathBuf) -> Result<bool> {
+    if !path.exists() {
+        return Ok(true);
+    }
+
+    let should_delete = match read_line(format!("Dir {path:?} already exists, delete it? [y/N]"))
+        .context("failed to ask output dir decision")?
+        .as_str()
+    {
+        "y" | "Y" => true,
+        _ => false,
+    };
+    if !should_delete {
+        println!("ok, do not delete it. Exit");
+        return Ok(false);
+    }
+
+    println!("delete dir {path:?}");
+    if path.is_dir() {
+        fs::remove_dir_all(&path)
+            .await
+            .context("when removing output dir")?;
+    } else {
+        fs::remove_file(&path)
+            .await
+            .context("when removing output file")?;
+    }
+
+    Ok(true)
 }
