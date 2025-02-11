@@ -21,7 +21,7 @@ pub async fn run_profile_command(args: ProfileArgs) -> Result<()> {
         return Ok(());
     }
 
-    if let Some(reg_dir) = args.profile_target.download_reg {
+    if let Some(reg_dir) = args.profile_target.thread_data {
         let output = if let Some(v) = args.output {
             v
         } else {

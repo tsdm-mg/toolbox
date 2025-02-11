@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 tm-api.workspace = true
+tm-types.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true

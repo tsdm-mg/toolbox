@@ -1988,6 +1988,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tm-api",
+ "tm-types",
  "tokio",
  "toml",
  "tracing",

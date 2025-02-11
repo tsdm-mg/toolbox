@@ -4,6 +4,9 @@ use tracing::warn;
 /// Forum base url.
 pub const BASE_URL: &str = "https://www.tsdm39.com";
 
+/// Yet another forum base url.
+pub const BASE_URL2: &str = "https://tsdm39.com";
+
 /// Platforms the content publisher currently using.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Platform {

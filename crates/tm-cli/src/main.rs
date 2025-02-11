@@ -9,6 +9,7 @@ mod analyze;
 mod cmd;
 mod parse;
 mod profile;
+mod signature;
 mod thread;
 mod utils;
 

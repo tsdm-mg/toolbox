@@ -1,6 +1,7 @@
 use crate::analyze::run_analyze_command;
 use crate::parse::run_parse_command;
 use crate::profile::run_profile_command;
+use crate::signature::run_signature_command;
 use crate::thread::run_thread_command;
 use anyhow::Result;
 use clap::ArgAction;
@@ -17,10 +18,10 @@ pub struct ProfileTargetGroups {
     pub uid: Option<String>,
 
     #[arg(
-        long = "download-reg",
-        help = "download all profiles in registration thread"
+        long = "thread-data",
+        help = "specify all users in a thread by the saved thread data dir path. Need thread subcommand downloaded the data by thread id first"
     )]
-    pub download_reg: Option<String>,
+    pub thread_data: Option<String>,
 }
 
 ///////// Args /////////
@@ -87,6 +88,24 @@ pub struct ProfileArgs {
     pub output: Option<String>,
 }
 
+#[derive(Clone, Debug, Args)]
+pub struct SignatureArgs {
+    #[arg(
+        long = "profile-data",
+        help = "dir path to load profile data. Need profile subcommand downloaded profiles first"
+    )]
+    pub profile_data: String,
+
+    #[arg(long = "tid", help = "check signature has link to thread or not")]
+    pub tid: String,
+
+    #[arg(
+        long = "thread-data",
+        help = "optional dir path to original thread data dir, to sort the result"
+    )]
+    pub thread_data: Option<String>,
+}
+
 ///////// Subcommand /////////
 
 #[derive(Clone, Debug, Parser)]
@@ -97,17 +116,20 @@ pub struct Cli {
 
 #[derive(Clone, Debug, Subcommand)]
 pub enum Command {
-    #[command(about = "fetch content in thread")]
+    #[command(about = "fetch post content in thread")]
     Thread(ThreadArgs),
 
-    #[command(about = "parse data from file")]
+    #[command(about = "parse post data from file")]
     Parse(ParseArgs),
 
     #[command(about = "analyze and produce statistics data")]
     Analyze(AnalyzeArgs),
 
-    #[command(about = "fetch user profile")]
+    #[command(about = "fetch user profile. Specify user by username or uid, or in a given thread")]
     Profile(ProfileArgs),
+
+    #[command(about = "check user profile signature content")]
+    Signature(SignatureArgs),
 }
 
 /// Main entry of all subcommands.
@@ -117,5 +139,6 @@ pub async fn run_command_with_args(cli: Cli) -> Result<()> {
         Command::Parse(parse_args) => run_parse_command(parse_args).await,
         Command::Analyze(analyze_args) => run_analyze_command(analyze_args).await,
         Command::Profile(profile_args) => run_profile_command(profile_args).await,
+        Command::Signature(signature_args) => run_signature_command(signature_args).await,
     }
 }
