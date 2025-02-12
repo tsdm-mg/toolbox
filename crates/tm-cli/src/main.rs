@@ -8,6 +8,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 mod analyze;
 mod cmd;
 mod parse;
+mod points;
 mod profile;
 mod signature;
 mod thread;

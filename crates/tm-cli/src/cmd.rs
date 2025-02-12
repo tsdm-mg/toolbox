@@ -1,11 +1,13 @@
 use crate::analyze::run_analyze_command;
 use crate::parse::run_parse_command;
+use crate::points::run_points_command;
 use crate::profile::run_profile_command;
 use crate::signature::run_signature_command;
 use crate::thread::run_thread_command;
 use anyhow::Result;
-use clap::ArgAction;
+use clap::{arg, ArgAction};
 use clap::{Args, Parser, Subcommand};
+
 ///////// Groups /////////
 
 #[derive(Clone, Debug, Args)]
@@ -106,6 +108,36 @@ pub struct SignatureArgs {
     pub thread_data: Option<String>,
 }
 
+#[derive(Clone, Debug, Args)]
+pub struct PointsArgs {
+    #[arg(
+        long = "changes",
+        help = "path to the file describing changes. Expected to be bbcode converted from latest points table"
+    )]
+    pub changes: String,
+
+    #[arg(
+        long = "extra-changes",
+        help = "Optional path to the json file recording extra points change for workgroup users."
+    )]
+    pub extra_changes: Option<String>,
+
+    #[arg(
+        long = "general-data",
+        help = "path to the file recording latest points for general users. Expected to be csv format converted from statistics xlsx sheet"
+    )]
+    pub general_data: String,
+
+    #[arg(
+        long = "workgroup-data",
+        help = "path to the file holding latest points data for workgroup users. Expected to be csv format converted from statistics xlsx sheet"
+    )]
+    pub workgroup_data: String,
+
+    #[arg(short = 'o', long = "output", help = "file to save populated data")]
+    pub output: String,
+}
+
 ///////// Subcommand /////////
 
 #[derive(Clone, Debug, Parser)]
@@ -130,6 +162,9 @@ pub enum Command {
 
     #[command(about = "check user profile signature content")]
     Signature(SignatureArgs),
+
+    #[command(about = "populate points changes")]
+    Points(PointsArgs),
 }
 
 /// Main entry of all subcommands.
@@ -140,5 +175,6 @@ pub async fn run_command_with_args(cli: Cli) -> Result<()> {
         Command::Analyze(analyze_args) => run_analyze_command(analyze_args).await,
         Command::Profile(profile_args) => run_profile_command(profile_args).await,
         Command::Signature(signature_args) => run_signature_command(signature_args).await,
+        Command::Points(points_args) => run_points_command(points_args).await,
     }
 }
