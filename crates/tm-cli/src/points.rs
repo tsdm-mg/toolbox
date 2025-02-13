@@ -1,5 +1,5 @@
 use crate::cmd::PointsArgs;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,15 +10,20 @@ use tokio::fs;
 
 static POINTS_RECORD_RE: OnceLock<Regex> = OnceLock::new();
 
-const POINTS_TABLE_HEAD: &str = "[color=rgb(68, 68, 68)][backcolor=rgb(255, 255, 255)][font=Verdana, Helvetica, Arial, sans-serif][size=14px][color=Red][size=3]❤ 萌战版块荣耀成就B线：380分
+const TABLE_HEADER: &str = "[tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
+
+const POINTS_TABLE_HEAD: &str = "[font=黑体][color=#000000][b]特殊积分指特殊活动期间获得的萌战积分。[/b][/color][/font]
+
+[b][color=Red][size=3]
+❤ 萌战版块荣耀成就B线：380分
 ❤ 萌战版块荣耀成就A线：443分
-[/size][/color][/size][/font][/backcolor][/color]
-[table=98%,rgb(255, 255, 255)]
+[/size][/color][/b]
+[table]
 [tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
 
 const POINTS_TABLE_MID: &str = "[/table]
 
-[table=98%,rgb(255, 255, 255)]
+[table]
 [tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
 
 const POINTS_TABLE_TAIL: &str = "[/table]";
@@ -137,6 +142,20 @@ impl PointsRecord {
     }
 }
 
+impl From<&IncrementRecord> for PointsRecord {
+    fn from(value: &IncrementRecord) -> Self {
+        Self {
+            username: value.username.clone(),
+            points: 0 + value.poll_points + value.special_points,
+            threads_count: 0,
+            threads_points: 0,
+            poll_points: value.poll_points,
+            special_points: value.special_points,
+            energy: value.energy,
+        }
+    }
+}
+
 // TODO: Record thread points and thread count.
 /// Describe a record of points change on a user participated in.
 ///
@@ -213,11 +232,9 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
     }
 
     // Load current status.
-    let mut general_data = load_current_statistics(args.general_data).await?;
-    let mut workgroup_data = load_current_statistics(args.workgroup_data).await?;
+    let (mut workgroup_data, mut general_data) = load_current_statistics(args.current).await?;
 
-    apply_changes(&mut general_data, &user_changes);
-    apply_changes(&mut workgroup_data, &user_changes);
+    apply_changes(&mut workgroup_data, &mut general_data, &user_changes);
 
     println!("Workgroup users count: {}", workgroup_data.len());
     println!("General users count: {}", general_data.len());
@@ -324,22 +341,77 @@ async fn populate_extra_record(data_path: String) -> Result<Vec<IncrementRecord>
     Ok(records)
 }
 
-async fn load_current_statistics(path: String) -> Result<Vec<PointsRecord>> {
+/// Load current statistics data from the file.
+///
+/// The file:
+///
+/// * Shall have the original bbcode holding all points status for all users.
+/// * Shall group into two tables where the first one is points for moe workgroup users and the
+///   later one is for general users.
+async fn load_current_statistics(path: String) -> Result<(Vec<PointsRecord>, Vec<PointsRecord>)> {
     let content = fs::read_to_string(path)
         .await
         .context("failed to read current statistics data")?;
-    let records = content
+
+    let tables_data = content.split(TABLE_HEADER).collect::<Vec<&str>>();
+
+    if tables_data.len() != 3 {
+        bail!("invalid content statistics data: not all two points table found");
+    }
+
+    let workgroup_data = tables_data[1]
         .lines()
         .into_iter()
         .filter_map(|x| PointsRecord::from_line(x))
         .collect::<Vec<_>>();
-    Ok(records)
+
+    let general_data = tables_data[2]
+        .lines()
+        .into_iter()
+        .filter_map(|x| PointsRecord::from_line(x))
+        .collect::<Vec<_>>();
+
+    Ok((workgroup_data, general_data))
 }
 
-fn apply_changes(data: &mut Vec<PointsRecord>, changes_map: &ChangesMap) {
+/// Apply changes in `changes_map` on `workgroup_data` and `general_data`.
+///
+/// ## Parameters
+///
+/// * `workgroup_data`: Current points state for moe workgroup users.
+/// * `general_data`: Current points state for general users those not in moe workgroup.
+/// * `changes_map`: Hash map, key is username, value is all the changes need to apply on user.
+///
+/// ## Steps
+///
+/// This function iterate through the `changes_map`, for each user in map:
+///
+/// 1. If the user is in `workgroup_data`, add the changes on the same user record in
+///   `workgroup_data`.
+/// 2. If the user is in `general_data`, add the changes on the same user record in
+///   `general_data`.
+/// 3. If the user presents in neither `workgroup_data` nor `general_data`, then the user gained
+///   moe rewards for the first time and append the data to the end of `general_data`. Perhaps we
+///   can use extra configs to specify each new user is in workgroup or not, this step makes further
+///   table sorting possible, but not implemented yet.
+fn apply_changes(
+    workgroup_data: &mut Vec<PointsRecord>,
+    general_data: &mut Vec<PointsRecord>,
+    changes_map: &ChangesMap,
+) {
     for (username, change) in changes_map.iter() {
-        if let Some(p) = data.iter_mut().find(|x| x.username.as_str() == username) {
-            p.apply_change(change);
+        if let Some(workgroup_record) = workgroup_data
+            .iter_mut()
+            .find(|x| x.username.as_str() == username)
+        {
+            workgroup_record.apply_change(change);
+        } else if let Some(general_record) = general_data
+            .iter_mut()
+            .find(|x| x.username.as_str() == username)
+        {
+            general_record.apply_change(change);
+        } else {
+            general_data.push(change.into())
         }
     }
 }

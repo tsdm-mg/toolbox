@@ -112,7 +112,7 @@ pub struct SignatureArgs {
 pub struct PointsArgs {
     #[arg(
         long = "changes",
-        help = "path to the file describing changes. Expected to be bbcode converted from latest points table"
+        help = "path to the file describing changes. Expected to be bbcode format converted from statistics xlsx sheet"
     )]
     pub changes: String,
 
@@ -123,16 +123,10 @@ pub struct PointsArgs {
     pub extra_changes: Option<String>,
 
     #[arg(
-        long = "general-data",
-        help = "path to the file recording latest points for general users. Expected to be csv format converted from statistics xlsx sheet"
+        long = "current",
+        help = "path to the file holding latest points for data. Expected to be bbcode copied from thread floor"
     )]
-    pub general_data: String,
-
-    #[arg(
-        long = "workgroup-data",
-        help = "path to the file holding latest points data for workgroup users. Expected to be csv format converted from statistics xlsx sheet"
-    )]
-    pub workgroup_data: String,
+    pub current: String,
 
     #[arg(short = 'o', long = "output", help = "file to save populated data")]
     pub output: String,
