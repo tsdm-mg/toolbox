@@ -420,7 +420,7 @@ impl UserParticipation {
                     round,
                     threads
                         .iter()
-                        .map(|x| x.name.to_owned())
+                        .map(|x| format!("{}{}", x.group.to_owned(), x.name.to_owned()))
                         .collect::<Vec<_>>()
                         .join(" "),
                 )
