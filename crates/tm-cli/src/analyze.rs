@@ -2,7 +2,6 @@ use crate::cmd::AnalyzeArgs;
 use crate::utils::parallel_future;
 use anyhow::{anyhow, Context, Result};
 use regex::Regex;
-use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -138,6 +137,89 @@ impl RewardPolicy {
     }
 }
 
+/// Round definition.
+///
+/// ```json
+/// [
+///   {
+///     name: "round 1",
+///     thread: [
+///     <ThreadGroup>
+///     ]
+///   }
+///   {
+///     name: "round 2",
+///     thread: [
+///     <ThreadGroup>
+///     ]
+///   }
+/// ]
+/// ```
+///
+/// Definition on each round.
+/// Calculate reward according to user fully participated in what rounds.
+///
+/// A round consists of a series of [ThreadGroup]. User are considered missing the round if any thread
+/// meets one or more following conditions:
+///
+/// * Not posted in thread.
+/// * Not posted in thread with the correct format.
+#[derive(Debug, Serialize, Deserialize)]
+struct Round {
+    /// Human-readable name.
+    name: String,
+
+    /// Thread can be a list of mix of group and single.
+    thread: Vec<ThreadGroup>,
+}
+
+/// Collects a group of thread that belongs to the same kind.
+///
+/// Between round and thread.
+///
+/// Note that the value [ThreadGroup::Group::thread] or [ThreadGroup::Single::path]
+/// is path to the directory contains thread data, and the thread
+/// data is expected to be serialized [tm_api::thread] instance.
+///
+/// In untagged format:
+///
+/// Group:
+///
+/// ```json
+/// {
+///   "name": "初赛",
+///   "thread": {
+///     "A组": "path_to_dir_a",
+///     "B组": "path_to_dir_b",
+///     "C组": "path_to_dir_c",
+///     "D组": "path_to_dir_d"
+///   }
+/// }
+/// ```
+///
+/// Single:
+///
+/// ```json
+/// {
+///   "name": "初赛结果",
+///   "path": "path_to_dir_result"
+/// }
+/// ```
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum ThreadGroup {
+    /// Value is pairs of thread name and thread data path.
+    ///
+    /// e.g. 初赛: { A组, B组, C组, D组 } => `{ name: "初赛", thread: { "A组": "path_a", "B组": "path_b", } }`
+    Group {
+        name: String,
+        thread: HashMap<String, String>,
+    },
+
+    /// A single thread, not grouped.
+    Single { name: String, path: String },
+}
+
 /// Thread config.
 #[derive(Debug, Serialize, Deserialize)]
 struct Thread {
@@ -160,38 +242,8 @@ struct AnalyzeConfig {
     /// Apply what reward to each user participated in.
     reward_policy: RewardPolicy,
 
-    /// Round definition.
-    ///
-    /// ```json
-    /// {
-    ///   "round_1": {
-    ///     "thread_a": [
-    ///       "json_file_1",
-    ///       "json_file_2"
-    ///     ]
-    ///   }
-    /// }
-    /// ```
-    ///
-    /// Definition on each round.
-    /// Calculate reward according to user fully participated in what rounds.
-    ///
-    /// A round consists of a series of `thread`. User are considered missing the round if any thread
-    /// meets one or more following conditions:
-    ///
-    /// * Not posted in thread.
-    /// * Not posted in thread with the correct format.
-    ///
-    /// String in the deepest vector are json file paths of a same thread.
-    ///
-    /// All thread data are serialized data in `Thread` format.
-    ///
-    /// Note that the value `String` is the path to the directory contains thread data, and the thread
-    /// data is expected to be serialized [tm_api::thread] instance.
-    round: HashMap<String, HashMap<String, String>>,
-
-    /// Path to the file containing current statistics data in html format.
-    current_data_path: String,
+    /// Stage is consists of a series of rounds.
+    round: Vec<Round>,
 
     /// Path to the file containing registration data.
     registration_path: String,
@@ -201,25 +253,52 @@ impl AnalyzeConfig {
     fn generate_thread_map(&self) -> Vec<ThreadFlag> {
         self.round
             .iter()
-            .flat_map(|(round_name, thread_group)| {
-                thread_group
-                    .iter()
-                    .map(|(thread_name, _)| ThreadFlag {
-                        round: round_name.clone(),
-                        name: thread_name.clone(),
-                        flag: Participation::Missed,
-                    })
-                    .collect::<Vec<_>>()
-            })
+            .flat_map(
+                |Round {
+                     name: round_name,
+                     thread: thread_group,
+                 }| {
+                    thread_group
+                        .iter()
+                        .flat_map(|group| match group {
+                            ThreadGroup::Group {
+                                name: group_name,
+                                thread,
+                            } => thread
+                                .iter()
+                                .map(|(thread_name, _)| ThreadFlag {
+                                    round: round_name.clone(),
+                                    group: group_name.clone(),
+                                    name: thread_name.clone(),
+                                    flag: Participation::Missed,
+                                })
+                                .collect::<Vec<_>>(),
+                            ThreadGroup::Single {
+                                name: thread_name, ..
+                            } => vec![ThreadFlag {
+                                round: round_name.clone(),
+                                group: String::new(),
+                                name: thread_name.clone(),
+                                flag: Participation::Missed,
+                            }],
+                        })
+                        .collect::<Vec<_>>()
+                },
+            )
             .collect()
     }
 }
 
 /// Struct stores thread info and flag state.
+///
+/// `第一轮 初赛A组` => `{ round: "第一轮", group: "初赛", name: "A组", flag: _ }`
 #[derive(Clone, Debug)]
 struct ThreadFlag {
     /// Round name.
     round: String,
+
+    /// Group name.
+    group: String,
 
     /// Thread name.
     name: String,
@@ -238,6 +317,9 @@ struct LoadedThreadPage {
     /// Round name.
     round: String,
 
+    /// Group name.
+    group: String,
+
     /// Thread name describes usage.
     name: String,
 
@@ -252,13 +334,13 @@ struct LoadedThreadPage {
 }
 
 impl LoadedThreadPage {
-    /// Find the post by post id `pid` in a specified thread where id is `tid`.
-    fn find_post(&self, tid: &str, pid: &str) -> Option<&PostModel> {
-        if self.tid != tid {
+    /// Find the post by the author's uid.
+    fn find_post(&self, round: &str, group: &str, name: &str, uid: &str) -> Option<&PostModel> {
+        if self.round != round || self.group != group || self.name != name {
             return None;
         }
 
-        self.thread.post_list.iter().find(|x| x.id == pid)
+        self.thread.post_list.iter().find(|x| x.author_id == uid)
     }
 }
 
@@ -363,7 +445,7 @@ impl UserParticipation {
         result
     }
 
-    /// Count rounds that not completedly participated in.
+    /// Count rounds that not completely participated in.
     fn count_not_ok(&self) -> usize {
         self.missed.iter().len() + self.incorrect.len()
     }
@@ -554,39 +636,97 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
         .await
         .context("failed to load registration data")?;
 
-    let post_data = parallel_future(config.round.iter(), 2, |(round_name, round)| async move {
-        let result = parallel_future(round.into_iter(), 4, |(name, thread_path)| {
-            let round = round_name.clone();
-            async move {
-                // Here the vec of thread data are expected to in the same thread but different
-                // pages, one page one element.
-                let thread = load_thread_data_from_dir(thread_path.as_str())
-                    .await
-                    .with_context(|| format!("when loading thread data from {thread_path}"))?;
-                if thread.is_empty() {
-                    return Err(anyhow!(
-                        "empty thread data parsed from file {}",
-                        thread_path
-                    ));
+    let post_data = parallel_future(
+        config.round.iter(),
+        2,
+        |Round {
+             name: round,
+             thread,
+         }| async move {
+            let result = parallel_future(thread.into_iter(), 4, |thread_group| {
+                let round = round.clone();
+
+                async move {
+                    match thread_group {
+                        ThreadGroup::Single {
+                            name,
+                            path: thread_path,
+                        } => {
+                            // Here we got:
+                            // { "name": "初赛A组", "path": "path_to_dir" }
+                            let thread = load_thread_data_from_dir(thread_path.as_str())
+                                .await
+                                .with_context(|| {
+                                    format!("when loading thread data from {thread_path}")
+                                })?;
+                            if thread.is_empty() {
+                                return Err(anyhow!(
+                                    "empty thread data parsed from file {}",
+                                    thread_path
+                                ));
+                            }
+
+                            let result = thread
+                                .into_iter()
+                                .map(|x| LoadedThreadPage {
+                                    round: round.clone(),
+                                    group: String::new(),
+                                    name: name.to_owned(),
+                                    page: x.page,
+                                    tid: x.tid,
+                                    thread: x.thread,
+                                })
+                                .collect::<Vec<_>>();
+
+                            Ok(result)
+                        }
+                        ThreadGroup::Group {
+                            name: group_name,
+                            thread: thread_map,
+                        } => {
+                            // Here we got a map of thread.
+                            // Assume we are in a group called "初赛", then the name is "初赛" and thread
+                            // can be: { "A组": "path_to_dir", "B组": "path_to_dir", ... }
+                            // To get the same result as `ThreadGroup::Single in the adjacent arm, join
+                            // the group name "初赛" and thread name "A组" together: "初赛A组".
+
+                            let mut result: Vec<LoadedThreadPage> = vec![];
+
+                            for (thread_name, path) in thread_map.iter() {
+                                let thread = load_thread_data_from_dir(path.as_str())
+                                    .await
+                                    .with_context(|| {
+                                        format!("when loading thread data from {path}")
+                                    })?;
+                                if thread.is_empty() {
+                                    return Err(anyhow!(
+                                        "empty thread data parsed from file {}",
+                                        path
+                                    ));
+                                }
+                                let mut all_thread_in_the_group = thread
+                                    .into_iter()
+                                    .map(|x| LoadedThreadPage {
+                                        round: round.clone(),
+                                        group: group_name.clone(),
+                                        name: thread_name.clone(),
+                                        page: x.page,
+                                        tid: x.tid,
+                                        thread: x.thread,
+                                    })
+                                    .collect::<Vec<_>>();
+                                result.append(&mut all_thread_in_the_group);
+                            }
+
+                            Ok(result)
+                        }
+                    }
                 }
-
-                let result = thread
-                    .into_iter()
-                    .map(|x| LoadedThreadPage {
-                        round: round.clone(),
-                        name: name.to_owned(),
-                        page: x.page,
-                        tid: x.tid,
-                        thread: x.thread,
-                    })
-                    .collect::<Vec<_>>();
-
-                Ok(result)
-            }
-        })
-        .await;
-        result
-    })
+            })
+            .await;
+            result
+        },
+    )
     .await?
     .into_iter()
     .flatten()
@@ -608,6 +748,8 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
 
     trace!("generating thread map template");
     let flag_template = config.generate_thread_map();
+
+    trace!("thread map template: {flag_template:#?}");
 
     trace!("producing participation result");
     let participation_result = produce_participation_result(reg_data, post_data, flag_template);
@@ -698,10 +840,6 @@ fn produce_participation_result(
     post_data: Vec<LoadedThreadPage>,
     flags_template: Vec<ThreadFlag>,
 ) -> Vec<UserParticipation> {
-    let link_selector = Selector::parse("a").expect("invalid link selector");
-    let find_post_re = Regex::new(r#"forum\.php\?mod=redirect((&amp;)|(&))+goto=findpost((&amp;)|(&))+ptid=(?<tid>\d+)((&amp;)|(&))+pid=(?<pid>\d+)"#).expect("invalid registration link find post regex");
-    let view_post_re = Regex::new(r#"forum\.php\?mod=viewthread((&amp;)|(&))+.*tid=(?<tid>\d+)((&amp;)|(&))+.*#pid(?<pid>\d+)$"#).expect("invalid registration link view post regex");
-
     let mut analyze_result = Vec::with_capacity(reg_data.len());
 
     trace!("traversing registration data");
@@ -710,7 +848,7 @@ fn produce_participation_result(
         // Each reg is a post in the registration thread, where one user registered.
         for reg in reg_page.thread.post_list.into_iter() {
             trace!(
-                "traversing registration data floor={}, user={}, uid={}",
+                "checking registration data floor={}, user={}, uid={}",
                 reg.floor,
                 reg.author,
                 reg.author_id
@@ -725,99 +863,33 @@ fn produce_participation_result(
             // this map are set to true.
             let mut flags = flags_template.clone();
 
-            // Traverse and check all `a` tags.
-            let doc = Html::parse_fragment(reg.body.as_str());
-            for (idx, node) in doc.select(&link_selector).enumerate() {
-                let link = match node.value().attr("href") {
-                    Some(v) => v,
-                    None => continue,
-                };
-                trace!("visiting href node");
+            for target in flags.iter_mut() {
+                trace!("analyzing round={}, name={}", target.round, target.name);
 
-                // The thread name expected to be.
-                // Note that the thread name may be longer than the one defined in analyze config,
-                // but always contains that one.
-                let thread_name = match node.prev_sibling() {
-                    Some(v) if v.value().is_text() => v.value().as_text().unwrap().to_string(),
-                    Some(v) if v.value().is_element() => {
-                        // Look back one br tag.
-                        let prev = v.value().as_element().unwrap();
-                        if prev.name() != "br" {
-                            continue;
-                        }
-
-                        match v.prev_sibling() {
-                            Some(prev_prev) if prev_prev.value().is_text() => {
-                                prev_prev.value().as_text().unwrap().to_string()
-                            }
-                            _ => continue,
+                target.flag = match post_data.iter().find_map(|x| {
+                    x.find_post(
+                        target.round.as_str(),
+                        target.group.as_str(),
+                        target.name.as_str(),
+                        reg.author_id.as_str(),
+                    )
+                }) {
+                    Some(v) => {
+                        if v.author_id == reg.author_id {
+                            Participation::Ok
+                        } else {
+                            trace!(
+                                "incorrect registration on author_id: expected: {}, got {}",
+                                reg.author_id,
+                                v.author_id
+                            );
+                            Participation::Incorrect
                         }
                     }
-                    _ => continue,
+                    None => Participation::Missed,
                 };
-                trace!("validating thread_name={}", thread_name);
 
-                // Expect text node.
-                // Here we get the thread flag user intend to register for.
-                let target_thread_flag = match flags
-                    .iter_mut()
-                    .find(|x| thread_name.contains(x.name.as_str()))
-                {
-                    Some(v) => v,
-                    None => continue,
-                };
-                trace!("validating target_thread_flag={:?}", target_thread_flag);
-
-                // Here we find the target thread.
-                // Now check the link.
-                //
-                // Link format:
-                // forum.php?mod=redirect&amp&amp;goto=findpost&amp;ptid=$THREAD_ID&amp;pid=$PID_NEED_TO_CAPTURE
-                //
-                // Capture the pid and check related post satisfy all the following conditions:
-                //
-                // 1. Exists in loaded thread.
-                // 2. Lives in the correct thread (not incorrect thread or round).
-                // 3. The author is the same with user currently checking.
-                //
-                // If so, set the related flag in flag_map to true.
-                //
-                // After all links are validated, check if all keys in flag_map is `true`:
-                //
-                // * If so, check passed.
-                // * If not, generate info about missing round.
-                let capture = match find_post_re
-                    .captures(link)
-                    .or_else(|| view_post_re.captures(link))
-                {
-                    Some(v) => v,
-                    None => {
-                        trace!("link re not matched on link: {link}");
-                        continue;
-                    }
-                };
-                // tid and pid always required in regex so they be never none.
-                let cap_tid = capture.name("tid").unwrap().as_str();
-                let cap_pid = capture.name("pid").unwrap().as_str();
-                trace!("capture link tid={}, pid={}", cap_tid, cap_pid);
-
-                target_thread_flag.flag =
-                    match post_data.iter().find_map(|x| x.find_post(cap_tid, cap_pid)) {
-                        Some(v) => {
-                            if v.author_id == reg.author_id {
-                                Participation::Ok
-                            } else {
-                                trace!(
-                                    "incorrect registration on author_id: expected: {}, got {}",
-                                    reg.author_id,
-                                    v.author_id
-                                );
-                                Participation::Incorrect
-                            }
-                        }
-                        None => Participation::Missed,
-                    };
-                trace!("updating a target_thread_flag={:?}", target_thread_flag);
+                trace!("updating thread flag={:?}", target.flag);
             }
 
             // Traverse finish, produce result for the user.

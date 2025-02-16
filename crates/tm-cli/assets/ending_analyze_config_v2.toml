@@ -1,0 +1,64 @@
+stage = "Ending"
+registration_path = "raw/00_登记帖"
+
+[reward_policy.complete]
+ww = 50
+tsb = 100
+energy = 2
+credit = 10
+[reward_policy.missing1]
+ww = 40
+tsb = 80
+energy = 0
+credit = 0
+[reward_policy.missing2]
+ww = 30
+tsb = 60
+energy = 0
+credit = 0
+
+[[round]]
+name = "第一轮"
+[[round.thread]]
+name = "初赛"
+thread."A组" = "raw/01_初赛_a"
+thread."B组" = "raw/01_初赛_b"
+thread."C组" = "raw/01_初赛_c"
+thread."D组" = "raw/01_初赛_d"
+[[round.thread]]
+name = "结果"
+path = "raw/01_初赛结果"
+
+[[round]]
+name = "第二轮"
+[[round.thread]]
+name = "四分之一决赛"
+thread."第1组" = "raw/02_四分之一决赛_1"
+thread."第2组" = "raw/02_四分之一决赛_2"
+thread."第3组" = "raw/02_四分之一决赛_3"
+thread."第4组" = "raw/02_四分之一决赛_4"
+[[round.thread]]
+name = "结果"
+path = "raw/02_四分之一决赛结果"
+
+[[round]]
+name = "第三轮"
+[[round.thread]]
+name = "半决赛"
+thread."第1组" = "raw/03_半决赛_1"
+thread."第2组" = "raw/03_半决赛_2"
+[[round.thread]]
+name = "排位赛第一场"
+path = "raw/03_排位赛第一场"
+[[round.thread]]
+name = "结果"
+path = "raw/03_半决赛结果"
+
+[[round]]
+name = "第四轮"
+[[round.thread]]
+name = "总决赛"
+path = "raw/04_总决赛"
+[[round.thread]]
+name = "排位赛第二场"
+path = "raw/04_排位赛第二场"

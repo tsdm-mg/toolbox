@@ -1973,6 +1973,9 @@ dependencies = [
 [[package]]
 name = "tm-bbcode"
 version = "0.1.0"
+dependencies = [
+ "racros",
+]
 
 [[package]]
 name = "tm-cli"
@@ -1988,6 +1991,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tm-api",
+ "tm-bbcode",
  "tm-types",
  "tokio",
  "toml",
