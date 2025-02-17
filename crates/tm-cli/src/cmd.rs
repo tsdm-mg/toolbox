@@ -73,8 +73,14 @@ pub struct AnalyzeArgs {
     )]
     pub config: String,
 
-    #[arg(long = "csv", help = "Path to output csv format analyze result")]
-    pub csv: Option<String>,
+    #[arg(long = "save-csv", help = "file to save csv format analyze result")]
+    pub save_csv_path: Option<String>,
+
+    #[arg(
+        long = "save-status",
+        help = "file to save bbcode format participation status"
+    )]
+    pub save_status_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Args)]

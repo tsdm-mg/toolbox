@@ -1987,7 +1987,6 @@ dependencies = [
  "csv",
  "futures",
  "regex",
- "scraper",
  "serde",
  "serde_json",
  "tm-api",

@@ -72,3 +72,8 @@ pub struct Post {
     /// See [PlatformValue] for details.
     pub platform: PlatformValue,
 }
+
+/// Generate a find post link for post specified by post id `pid`.
+pub fn generate_find_post_link(pid: impl AsRef<str>) -> String {
+    format!("forum.php?mod=redirect&goto=findpost&pid={}", pid.as_ref())
+}

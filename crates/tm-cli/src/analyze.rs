@@ -1,17 +1,15 @@
 use crate::cmd::AnalyzeArgs;
 use crate::utils::parallel_future;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::iter::Filter;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::slice::Iter;
-use tm_api::post::Post as PostModel;
+use tm_api::post::{generate_find_post_link, Post as PostModel};
 use tm_api::thread::Thread as ThreadModel;
-use tm_bbcode::{bbcode, BBCode, Table, TableData, TableRow};
+use tm_bbcode::{bbcode, bbcode_to_string, Color, Table, TableData, TableRow, Url, WebColor};
 use tokio::fs;
 use tracing::trace;
 
@@ -207,6 +205,28 @@ impl Round {
             ))
         }
     }
+
+    /// Generate round status in bbcode format.
+    ///
+    /// The code is a single line text that can be placed into a table data (aka `[td][/td]`).
+    ///
+    /// In format:
+    ///
+    /// `${round_index}. ${all group generated bbcode}`
+    ///
+    /// where the `group`s are space separated.
+    ///
+    /// e.g. `1. 初赛【A组；B组；C组；D组】 结果`
+    fn generate_bbcode(&self, idx: usize) -> String {
+        let content = self
+            .group
+            .iter()
+            .map(|x| x.generate_bbcode())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        format!("{idx}. {}", content)
+    }
 }
 
 /// Collects a group of thread that belongs to the same kind.
@@ -264,8 +284,35 @@ impl ThreadGroup {
             }
             None => match self.thread[0].state {
                 Participation::Ok => None,
-                Participation::Missed => Some(self.thread[0].name.to_owned()),
+                Participation::Missed | Participation::Invalid => {
+                    Some(self.thread[0].name.to_owned())
+                }
             },
+        }
+    }
+
+    /// Generate group status in bbcode format.
+    ///
+    /// Format is decided by the group thread count.
+    ///
+    /// * If the group is a real group (with more than one thread and a name)
+    ///   `${GROUP_NAME}【${all thread generated code}】`
+    ///   where the thread generated code is joined by `；`
+    ///   e.g. `初赛【A组；B组；C组；D组】`
+    /// * If the group is actually a single thread (with only one thread and no name).
+    ///   `${thread generated code}`
+    ///   e.g. `结果`
+    fn generate_bbcode(&self) -> String {
+        let code_vec = self
+            .thread
+            .iter()
+            .map(|x| x.generate_bbcode())
+            .collect::<Vec<_>>();
+
+        if let Some(name) = self.name.as_ref() {
+            format!("{}【{}】", name, code_vec.join("；"))
+        } else {
+            code_vec.join("；")
         }
     }
 }
@@ -285,6 +332,51 @@ struct Thread {
     /// to carry user participation status so keep it here.
     #[serde(default, skip_serializing)]
     state: Participation,
+
+    /// Floor number of the user participation.
+    #[serde(default, skip_serializing)]
+    floor: u32,
+
+    /// Post id.
+    ///
+    /// Record here to make a redirect link.
+    #[serde(default, skip_serializing)]
+    pid: String,
+}
+
+impl Thread {
+    /// Generate bbcode status for current thread.
+    ///
+    /// The thread can be generated into different format of bbcode according to participation state.
+    ///
+    /// * [Participation::Ok] `[url=${FLOOR_LINK}]${THREAD_NAME}#${FLOOR}[/url]`
+    /// * [Participation::Missed] `[color=Gray]${THREAD_NAME}[/color]`
+    /// * [Participation::Invalid] `[url=${FLOOR_LINK}][color=DarkRed]${THREAD_NAME}#${FLOOR}[/color][/url]`
+    fn generate_bbcode(&self) -> String {
+        match self.state {
+            Participation::Ok => bbcode_to_string(&Url::new(
+                generate_find_post_link(self.pid.as_str()),
+                vec![Box::new(format!("{}#{}", self.name.as_str(), self.floor))],
+            )),
+            Participation::Missed => {
+                // With color
+                // bbcode_to_string(&Color::new(
+                //     WebColor::Gray,
+                //     vec![Box::new(self.name.clone())],
+                // ))
+
+                // Without color
+                self.name.clone()
+            }
+            Participation::Invalid => bbcode_to_string(&Url::new(
+                generate_find_post_link(self.pid.as_str()),
+                vec![Box::new(Color::new(
+                    WebColor::DarkRed,
+                    vec![Box::new(format!("{}#{}", self.name.as_str(), self.floor))],
+                ))],
+            )),
+        }
+    }
 }
 
 /// Config definition for analyzing.
@@ -304,27 +396,6 @@ struct AnalyzeConfig {
 
     /// Path to the file containing registration data.
     registration_path: String,
-}
-
-/// Struct stores thread info and flag state.
-///
-/// `第一轮 初赛A组` => `{ round: "第一轮", group: "初赛", name: "A组", flag: _ }`
-#[derive(Clone, Debug)]
-struct ThreadFlag {
-    /// Round name.
-    round: String,
-
-    /// Round count
-    round_index: usize,
-
-    /// Group name.
-    group: Option<String>,
-
-    /// Thread name.
-    name: String,
-
-    /// Stored flag.
-    flag: Participation,
 }
 
 /// Container of loaded thread data.
@@ -407,6 +478,9 @@ enum Participation {
     /// Missed a thread in round.
     #[default]
     Missed,
+
+    /// Invalid participation.
+    Invalid,
 }
 
 /// Participation status on a user.
@@ -418,10 +492,16 @@ struct UserParticipation {
     /// User's uid.
     uid: String,
 
+    /// Post id of floor in registration thread.
+    reg_pid: String,
+
     /// Post floor number in registration thread.
     floor: u32,
 
     /// Pairs of round index and threads in the round.
+    ///
+    /// [Round]s in this field is expected in the sort of the ones from external data source, the
+    /// sort shall not be rearranged otherwise may break group order.
     rounds: Vec<Round>,
 }
 
@@ -462,40 +542,16 @@ impl UserParticipation {
         ]
     }
 
-    // fn generate_bbcode_data(&self) -> TableData {
-    //     // Key value pairs of round_idx and status.
-    //     //
-    //     // $ROUND_IDX. $GROUP_NAME【$A; $B; $C; $D】$xxx, ...
-    //     //
-    //     let mut round_status_map: HashMap<usize, Vec<&'_ ThreadFlag>> = HashMap::new();
-    //     for flag in [&self.ok, &self.missed, &self.incorrect].iter().flat_map(|x| x.values()).flatten() {
-    //         if let Some(v) = round_status_map.get_mut(&flag.round_index) {
-    //             v.push(flag);
-    //         } else {
-    //             round_status_map.insert(flag.round_index, vec![flag]);
-    //         }
-    //     }
-
-    //     round_status_map.iter().map(|(round_idx, status)| {
-    //         // Pairs of group name group state.
-    //         let mut groups: HashMap<String, Vec<&'_ ThreadFlag>> = HashMap::new();
-    //         for state in status.into_iter() {
-    //             if let Some(v) = groups.get_mut(&state.group) {
-    //                 v.push(state);
-    //             } else {
-    //                 groups.insert(state.group.clone(), vec![state]);
-    //             }
-    //         }
-
-    //         for (group_name, group_status) in groups.into_iter() {
-    //             format!("{}. {}【{}】", round_idx, group_name, group_status.iter().map(|x| match x.flag {}));
-    //         }
-    //     });
-
-    //     TableData::no_size(
-    //         vec![]
-    //     )
-    // }
+    fn generate_bbcode(&self) -> TableData {
+        let data = self
+            .rounds
+            .iter()
+            .enumerate()
+            .map(|(idx, x)| x.generate_bbcode(idx + 1))
+            .collect::<Vec<_>>()
+            .join("\n");
+        TableData::no_size(vec![Box::new(data)])
+    }
 }
 
 /// Produced result on user participation.
@@ -528,6 +584,23 @@ impl AnalyzeResult {
             missing3: vec![],
             missing4: vec![],
         }
+    }
+
+    /// Return a vec of [UserParticipation]s that combine all user participation held by current
+    /// instance and sort by floor in registration thread.
+    fn combine_and_sort(&self) -> Vec<&UserParticipation> {
+        let mut data = [
+            self.complete.as_slice(),
+            self.missing1.as_slice(),
+            self.missing2.as_slice(),
+            self.missing3.as_slice(),
+            self.missing4.as_slice(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        data.sort_by(sort_user_participation_ref);
+        data
     }
 
     fn generate_text_result(&self) -> String {
@@ -632,36 +705,34 @@ impl AnalyzeResult {
     /// * Signature link **not implemented yet**
     /// * Tip **optional**
     fn generate_csv_result(&self, reward_policy: &RewardPolicy) -> Vec<Vec<String>> {
-        let mut records = [
-            self.complete.as_slice(),
-            self.missing1.as_slice(),
-            self.missing2.as_slice(),
-            self.missing3.as_slice(),
-            self.missing4.as_slice(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-        records.sort_by(sort_user_participation_ref);
-        records
+        self.combine_and_sort()
             .into_iter()
             .map(|x| x.generate_csv_record(reward_policy))
             .collect()
     }
 
+    /// Build a bbcode table describing user participation status.
     fn generate_participation_table(&self) -> Table {
-        let mut table_body = vec![];
-        for p in self.complete.iter() {
+        let records = self.combine_and_sort();
+        let mut table = vec![TableRow::new(vec![
+            TableData::with_size(TABLE_WIDTH_30, bbcode!("楼层")),
+            TableData::with_size(TABLE_WIDTH_110, bbcode!("ID")),
+            TableData::no_size(bbcode!("参与情况")),
+        ])];
+        for p in records.iter() {
             let row = TableRow::new(vec![
-                TableData::with_size(TABLE_WIDTH_30, vec![Box::new(format!("{}", p.floor))]),
-                TableData::with_size(TABLE_WIDTH_110, vec![Box::new(p.uid.clone())]),
-                // p.generate_bbcode_data()
+                TableData::no_size(vec![Box::new(Url::new(
+                    generate_find_post_link(p.reg_pid.as_str()),
+                    vec![Box::new(format!("{}", p.floor))],
+                ))]),
+                TableData::no_size(vec![Box::new(p.username.clone())]),
+                p.generate_bbcode(),
             ]);
 
-            table_body.push(row);
+            table.push(row);
         }
 
-        Table::new(table_body)
+        Table::new(table)
     }
 }
 
@@ -676,6 +747,10 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
     let reg_data = load_thread_data_from_dir(config.registration_path.as_str())
         .await
         .context("failed to load registration data")?;
+
+    if reg_data.is_empty() {
+        bail!("error: empty registration data")
+    }
 
     let post_data = parallel_future(
         config.round.iter(),
@@ -751,7 +826,7 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
 
     println!("{}", analyze_result.generate_text_result());
 
-    if let Some(csv_path) = args.csv {
+    if let Some(csv_path) = args.save_csv_path {
         println!("writing csv data to {csv_path}");
         let file = OpenOptions::new()
             .write(true)
@@ -772,6 +847,24 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
             .flush()
             .with_context(|| format!("failed to flush csv output file {csv_path}"))?;
         println!("csv data saved in {csv_path}");
+    }
+
+    if let Some(status_path) = args.save_status_path {
+        println!("writing participation status data to {status_path}");
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(status_path.clone())?;
+        let table = analyze_result.generate_participation_table();
+
+        let data = bbcode_to_string(&table);
+        let mut writer = BufWriter::new(file);
+        writer
+            .write_all(data.as_bytes())
+            .context("failed to save bbcode participation status")?;
+        writer.flush()?;
+        println!("bbcode participation status saved in {status_path}");
     }
 
     Ok(())
@@ -859,18 +952,23 @@ fn produce_participation_result(
                 trace!("analyzing round={}", round.name);
                 for group in round.group.iter_mut() {
                     for thread in group.thread.iter_mut() {
-                        thread.state = post_data
-                            .iter()
-                            .find_map(|x| {
-                                x.find_post(
-                                    round.name.as_str(),
-                                    group.name.as_ref(),
-                                    thread.name.as_str(),
-                                    reg.author_id.as_str(),
-                                )
-                            })
-                            .map(|_| Participation::Ok)
-                            .unwrap_or_default();
+                        match post_data.iter().find_map(|x| {
+                            x.find_post(
+                                round.name.as_str(),
+                                group.name.as_ref(),
+                                thread.name.as_str(),
+                                reg.author_id.as_str(),
+                            )
+                        }) {
+                            Some(post) => {
+                                thread.pid = post.id.clone();
+                                thread.floor = post.floor;
+                                thread.state = Participation::Ok;
+                            }
+                            None => {
+                                thread.state = Participation::Missed;
+                            }
+                        }
                         trace!(
                             "analyzing round={}, group={:?}, thread={}, flag={:?}",
                             round.name,
@@ -887,6 +985,7 @@ fn produce_participation_result(
                 username: reg.author,
                 uid: reg.author_id,
                 floor: reg.floor,
+                reg_pid: reg.id,
                 rounds: flags,
             });
         }
@@ -935,18 +1034,4 @@ fn produce_analyze_result(user_participation: Vec<UserParticipation>) -> Analyze
     analyze_result.missing4.sort_by(sort_user_participation);
 
     analyze_result
-}
-
-fn group_thread_flag_by_round(
-    filter: Filter<Iter<'_, ThreadFlag>, fn(&&ThreadFlag) -> bool>,
-) -> HashMap<String, Vec<ThreadFlag>> {
-    let mut map = HashMap::<String, Vec<ThreadFlag>>::new();
-    for element in filter {
-        if let Some(v) = map.get_mut(element.round.as_str()) {
-            (*v).push(element.to_owned());
-        } else {
-            map.insert(element.round.clone(), vec![element.to_owned()]);
-        }
-    }
-    map
 }
