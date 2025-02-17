@@ -11,8 +11,12 @@ use std::path::PathBuf;
 use std::slice::Iter;
 use tm_api::post::Post as PostModel;
 use tm_api::thread::Thread as ThreadModel;
+use tm_bbcode::{bbcode, BBCode, Table, TableData, TableRow};
 use tokio::fs;
 use tracing::trace;
+
+const TABLE_WIDTH_30: usize = 30;
+const TABLE_WIDTH_110: usize = 110;
 
 /// Moe stages.
 ///
@@ -164,70 +168,123 @@ impl RewardPolicy {
 ///
 /// * Not posted in thread.
 /// * Not posted in thread with the correct format.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Round {
     /// Human-readable name.
     name: String,
 
     /// Thread can be a list of mix of group and single.
-    thread: Vec<ThreadGroup>,
+    group: Vec<ThreadGroup>,
+}
+
+impl Round {
+    /// Check if the current round is missed.
+    ///
+    /// A round is considered as missed if user missed any thread in it.
+    fn is_missed(&self) -> bool {
+        self.group.iter().any(|group| group.missed_info().is_some())
+    }
+
+    /// Produce a plain text result for missed rounds info.
+    ///
+    /// In this format: `missed 第一轮【A组】 结果`
+    ///
+    /// Return `Some(info)` if any or `None` if not.
+    fn missed_info(&self, indent: usize) -> Option<String> {
+        let all_missed_info = self
+            .group
+            .iter()
+            .filter_map(|group| group.missed_info())
+            .collect::<Vec<_>>();
+        if all_missed_info.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "{}missed {} {}",
+                " ".repeat(indent),
+                self.name,
+                all_missed_info.join(" ")
+            ))
+        }
+    }
 }
 
 /// Collects a group of thread that belongs to the same kind.
 ///
-/// Between round and thread.
+/// Structure between round and thread.
 ///
-/// Note that the value [ThreadGroup::Group::thread] or [ThreadGroup::Single::path]
-/// is path to the directory contains thread data, and the thread
-/// data is expected to be serialized [tm_api::thread] instance.
+/// Can contain be either:
 ///
-/// In untagged format:
-///
-/// Group:
-///
-/// ```json
-/// {
-///   "name": "初赛",
-///   "thread": {
-///     "A组": "path_to_dir_a",
-///     "B组": "path_to_dir_b",
-///     "C组": "path_to_dir_c",
-///     "D组": "path_to_dir_d"
-///   }
-/// }
-/// ```
-///
-/// Single:
-///
-/// ```json
-/// {
-///   "name": "初赛结果",
-///   "path": "path_to_dir_result"
-/// }
-/// ```
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum ThreadGroup {
+/// * Grouped: A series of threads with a name.
+/// * Single: Only one thread with `None` as  name.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ThreadGroup {
+    /// Group name.
+    name: Option<String>,
+
     /// Value is pairs of thread name and thread data path.
     ///
     /// e.g. 初赛: { A组, B组, C组, D组 } => `{ name: "初赛", thread: { "A组": "path_a", "B组": "path_b", } }`
-    Group {
-        name: String,
-        thread: HashMap<String, String>,
-    },
+    thread: Vec<Thread>,
+}
 
-    /// A single thread, not grouped.
-    Single { name: String, path: String },
+impl ThreadGroup {
+    fn new_group(name: String, thread: Vec<Thread>) -> Self {
+        ThreadGroup {
+            name: Some(name),
+            thread,
+        }
+    }
+
+    fn new_single(thread: Thread) -> Self {
+        ThreadGroup {
+            name: None,
+            thread: vec![thread],
+        }
+    }
+
+    /// Generate missed thread info
+    ///
+    /// Example info: `初赛【A组；B组】 结果`
+    ///
+    /// Return `Some(info)` if any missed or `None` if all not missed.
+    fn missed_info(&self) -> Option<String> {
+        match self.name.as_ref() {
+            Some(group_name) => {
+                let missed_thread = self
+                    .thread
+                    .iter()
+                    .filter_map(|x| (x.state != Participation::Ok).then(|| x.name.to_owned()))
+                    .collect::<Vec<_>>();
+                if missed_thread.is_empty() {
+                    None
+                } else {
+                    Some(format!("{group_name}【{}】", missed_thread.join("；")))
+                }
+            }
+            None => match self.thread[0].state {
+                Participation::Ok => None,
+                Participation::Missed => Some(self.thread[0].name.to_owned()),
+            },
+        }
+    }
 }
 
 /// Thread config.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Thread {
     /// Thread name, or call it id.
     name: String,
 
     /// File path.
-    file: String,
+    path: String,
+
+    /// User participation in the current thread.
+    ///
+    /// Actually this field differs among users and not presented in config. But we need a struct
+    /// to carry user participation status so keep it here.
+    #[serde(default, skip_serializing)]
+    state: Participation,
 }
 
 /// Config definition for analyzing.
@@ -249,46 +306,6 @@ struct AnalyzeConfig {
     registration_path: String,
 }
 
-impl AnalyzeConfig {
-    fn generate_thread_map(&self) -> Vec<ThreadFlag> {
-        self.round
-            .iter()
-            .flat_map(
-                |Round {
-                     name: round_name,
-                     thread: thread_group,
-                 }| {
-                    thread_group
-                        .iter()
-                        .flat_map(|group| match group {
-                            ThreadGroup::Group {
-                                name: group_name,
-                                thread,
-                            } => thread
-                                .iter()
-                                .map(|(thread_name, _)| ThreadFlag {
-                                    round: round_name.clone(),
-                                    group: group_name.clone(),
-                                    name: thread_name.clone(),
-                                    flag: Participation::Missed,
-                                })
-                                .collect::<Vec<_>>(),
-                            ThreadGroup::Single {
-                                name: thread_name, ..
-                            } => vec![ThreadFlag {
-                                round: round_name.clone(),
-                                group: String::new(),
-                                name: thread_name.clone(),
-                                flag: Participation::Missed,
-                            }],
-                        })
-                        .collect::<Vec<_>>()
-                },
-            )
-            .collect()
-    }
-}
-
 /// Struct stores thread info and flag state.
 ///
 /// `第一轮 初赛A组` => `{ round: "第一轮", group: "初赛", name: "A组", flag: _ }`
@@ -297,8 +314,11 @@ struct ThreadFlag {
     /// Round name.
     round: String,
 
+    /// Round count
+    round_index: usize,
+
     /// Group name.
-    group: String,
+    group: Option<String>,
 
     /// Thread name.
     name: String,
@@ -318,7 +338,7 @@ struct LoadedThreadPage {
     round: String,
 
     /// Group name.
-    group: String,
+    group: Option<String>,
 
     /// Thread name describes usage.
     name: String,
@@ -335,8 +355,16 @@ struct LoadedThreadPage {
 
 impl LoadedThreadPage {
     /// Find the post by the author's uid.
-    fn find_post(&self, round: &str, group: &str, name: &str, uid: &str) -> Option<&PostModel> {
-        if self.round != round || self.group != group || self.name != name {
+    ///
+    /// Only find in target round and group to avoid evaluating result from incorrect threads.
+    fn find_post(
+        &self,
+        round: &str,
+        group: Option<&String>,
+        name: &str,
+        uid: &str,
+    ) -> Option<&PostModel> {
+        if self.round != round || self.group.as_ref() != group || self.name != name {
             return None;
         }
 
@@ -371,16 +399,14 @@ pub(crate) struct ThreadPageData {
 }
 
 /// Enum represent participate state.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 enum Participation {
     /// Participated with the correct format.
     Ok,
 
     /// Missed a thread in round.
+    #[default]
     Missed,
-
-    /// Incorrect registration.
-    Incorrect,
 }
 
 /// Participation status on a user.
@@ -395,64 +421,29 @@ struct UserParticipation {
     /// Post floor number in registration thread.
     floor: u32,
 
-    /// Threads participated with the correct action.
-    ok: HashMap<String, Vec<ThreadFlag>>,
-
-    /// Threads missed.
-    missed: HashMap<String, Vec<ThreadFlag>>,
-
-    /// Threads user intend to register an incorrect post.
-    incorrect: HashMap<String, Vec<ThreadFlag>>,
+    /// Pairs of round index and threads in the round.
+    rounds: Vec<Round>,
 }
 
 impl UserParticipation {
-    fn count_missing_rounds(&self) -> usize {
-        self.missed.len() + self.incorrect.len()
-    }
-
-    fn generate_rounds(&self, indent: usize) -> String {
-        let mut result = String::new();
-        for (round, threads) in self.missed.iter() {
-            result.push_str(
-                format!(
-                    "{}missed {} {}\n",
-                    " ".repeat(indent),
-                    round,
-                    threads
-                        .iter()
-                        .map(|x| format!("{}{}", x.group.to_owned(), x.name.to_owned()))
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                )
-                .as_str(),
-            );
-        }
-        for (round, threads) in self.incorrect.iter() {
-            result.push_str(
-                format!(
-                    "{}incorrect {} {}\n",
-                    " ".repeat(indent),
-                    round,
-                    threads
-                        .iter()
-                        .map(|x| x.name.to_owned())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                )
-                .as_str(),
-            );
-        }
-        result
-    }
-
     /// Count rounds that not completely participated in.
-    fn count_not_ok(&self) -> usize {
-        self.missed.iter().len() + self.incorrect.len()
+    fn count_missing_rounds(&self) -> usize {
+        self.rounds.iter().filter(|x| x.is_missed()).count()
+    }
+
+    /// Generate rounds info text.
+    fn missed_info(&self, indent: usize) -> String {
+        self.rounds
+            .iter()
+            .filter_map(|x| x.missed_info(indent))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Generate a single record.
     fn generate_csv_record(&self, reward_policy: &RewardPolicy) -> Vec<String> {
-        let pat = match self.count_not_ok() {
+        let missed_count = self.count_missing_rounds();
+        let pat = match missed_count {
             0 => "全过程",
             1 => "少一轮",
             2 => "少两轮",
@@ -465,11 +456,46 @@ impl UserParticipation {
             self.username.clone(),
             self.uid.to_string(),
             pat.to_string(),
-            reward_policy.generate_reward_text(self.count_not_ok()),
+            reward_policy.generate_reward_text(missed_count),
             String::new(),
-            self.generate_rounds(0).trim().to_string(),
+            self.missed_info(0).trim().to_string(),
         ]
     }
+
+    // fn generate_bbcode_data(&self) -> TableData {
+    //     // Key value pairs of round_idx and status.
+    //     //
+    //     // $ROUND_IDX. $GROUP_NAME【$A; $B; $C; $D】$xxx, ...
+    //     //
+    //     let mut round_status_map: HashMap<usize, Vec<&'_ ThreadFlag>> = HashMap::new();
+    //     for flag in [&self.ok, &self.missed, &self.incorrect].iter().flat_map(|x| x.values()).flatten() {
+    //         if let Some(v) = round_status_map.get_mut(&flag.round_index) {
+    //             v.push(flag);
+    //         } else {
+    //             round_status_map.insert(flag.round_index, vec![flag]);
+    //         }
+    //     }
+
+    //     round_status_map.iter().map(|(round_idx, status)| {
+    //         // Pairs of group name group state.
+    //         let mut groups: HashMap<String, Vec<&'_ ThreadFlag>> = HashMap::new();
+    //         for state in status.into_iter() {
+    //             if let Some(v) = groups.get_mut(&state.group) {
+    //                 v.push(state);
+    //             } else {
+    //                 groups.insert(state.group.clone(), vec![state]);
+    //             }
+    //         }
+
+    //         for (group_name, group_status) in groups.into_iter() {
+    //             format!("{}. {}【{}】", round_idx, group_name, group_status.iter().map(|x| match x.flag {}));
+    //         }
+    //     });
+
+    //     TableData::no_size(
+    //         vec![]
+    //     )
+    // }
 }
 
 /// Produced result on user participation.
@@ -532,11 +558,11 @@ impl AnalyzeResult {
             for p in self.missing1.iter() {
                 result.push_str(
                     format!(
-                        "  {}({} #{})\n{}",
+                        "  {}({} #{})\n{}\n",
                         p.username,
                         p.uid,
                         p.floor,
-                        p.generate_rounds(4)
+                        p.missed_info(4)
                     )
                     .as_str(),
                 );
@@ -548,11 +574,11 @@ impl AnalyzeResult {
             for p in self.missing2.iter() {
                 result.push_str(
                     format!(
-                        "  {}({} #{})\n{}",
+                        "  {}({} #{})\n{}\n",
                         p.username,
                         p.uid,
                         p.floor,
-                        p.generate_rounds(4)
+                        p.missed_info(4)
                     )
                     .as_str(),
                 );
@@ -564,11 +590,11 @@ impl AnalyzeResult {
             for p in self.missing3.iter() {
                 result.push_str(
                     format!(
-                        "  {}({} #{})\n{}",
+                        "  {}({} #{})\n{}\n",
                         p.username,
                         p.uid,
                         p.floor,
-                        p.generate_rounds(4)
+                        p.missed_info(4)
                     )
                     .as_str(),
                 );
@@ -580,11 +606,11 @@ impl AnalyzeResult {
             for p in self.missing4.iter() {
                 result.push_str(
                     format!(
-                        "  {}({} #{})\n{}",
+                        "  {}({} #{})\n{}\n",
                         p.username,
                         p.uid,
                         p.floor,
-                        p.generate_rounds(4)
+                        p.missed_info(4)
                     )
                     .as_str(),
                 );
@@ -622,6 +648,21 @@ impl AnalyzeResult {
             .map(|x| x.generate_csv_record(reward_policy))
             .collect()
     }
+
+    fn generate_participation_table(&self) -> Table {
+        let mut table_body = vec![];
+        for p in self.complete.iter() {
+            let row = TableRow::new(vec![
+                TableData::with_size(TABLE_WIDTH_30, vec![Box::new(format!("{}", p.floor))]),
+                TableData::with_size(TABLE_WIDTH_110, vec![Box::new(p.uid.clone())]),
+                // p.generate_bbcode_data()
+            ]);
+
+            table_body.push(row);
+        }
+
+        Table::new(table_body)
+    }
 }
 
 pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
@@ -641,86 +682,42 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
         2,
         |Round {
              name: round,
-             thread,
+             group: thread,
          }| async move {
             let result = parallel_future(thread.into_iter(), 4, |thread_group| {
                 let round = round.clone();
 
                 async move {
-                    match thread_group {
-                        ThreadGroup::Single {
-                            name,
-                            path: thread_path,
-                        } => {
-                            // Here we got:
-                            // { "name": "初赛A组", "path": "path_to_dir" }
-                            let thread = load_thread_data_from_dir(thread_path.as_str())
-                                .await
-                                .with_context(|| {
-                                    format!("when loading thread data from {thread_path}")
-                                })?;
-                            if thread.is_empty() {
-                                return Err(anyhow!(
-                                    "empty thread data parsed from file {}",
-                                    thread_path
-                                ));
-                            }
+                    // Here we got a map of thread.
+                    // Assume we are in a group called "初赛", then the name is "初赛" and thread
+                    // can be: { "A组": "path_to_dir", "B组": "path_to_dir", ... }
+                    // To get the same result as `ThreadGroup::Single in the adjacent arm, join
+                    // the group name "初赛" and thread name "A组" together: "初赛A组".
 
-                            let result = thread
-                                .into_iter()
-                                .map(|x| LoadedThreadPage {
-                                    round: round.clone(),
-                                    group: String::new(),
-                                    name: name.to_owned(),
-                                    page: x.page,
-                                    tid: x.tid,
-                                    thread: x.thread,
-                                })
-                                .collect::<Vec<_>>();
+                    let mut result: Vec<LoadedThreadPage> = vec![];
 
-                            Ok(result)
+                    for Thread { name, path, .. } in thread_group.thread.iter() {
+                        let thread = load_thread_data_from_dir(path.as_str())
+                            .await
+                            .with_context(|| format!("when loading thread data from {path}"))?;
+                        if thread.is_empty() {
+                            return Err(anyhow!("empty thread data parsed from file {}", path));
                         }
-                        ThreadGroup::Group {
-                            name: group_name,
-                            thread: thread_map,
-                        } => {
-                            // Here we got a map of thread.
-                            // Assume we are in a group called "初赛", then the name is "初赛" and thread
-                            // can be: { "A组": "path_to_dir", "B组": "path_to_dir", ... }
-                            // To get the same result as `ThreadGroup::Single in the adjacent arm, join
-                            // the group name "初赛" and thread name "A组" together: "初赛A组".
-
-                            let mut result: Vec<LoadedThreadPage> = vec![];
-
-                            for (thread_name, path) in thread_map.iter() {
-                                let thread = load_thread_data_from_dir(path.as_str())
-                                    .await
-                                    .with_context(|| {
-                                        format!("when loading thread data from {path}")
-                                    })?;
-                                if thread.is_empty() {
-                                    return Err(anyhow!(
-                                        "empty thread data parsed from file {}",
-                                        path
-                                    ));
-                                }
-                                let mut all_thread_in_the_group = thread
-                                    .into_iter()
-                                    .map(|x| LoadedThreadPage {
-                                        round: round.clone(),
-                                        group: group_name.clone(),
-                                        name: thread_name.clone(),
-                                        page: x.page,
-                                        tid: x.tid,
-                                        thread: x.thread,
-                                    })
-                                    .collect::<Vec<_>>();
-                                result.append(&mut all_thread_in_the_group);
-                            }
-
-                            Ok(result)
-                        }
+                        let mut all_thread_in_the_group = thread
+                            .into_iter()
+                            .map(|x| LoadedThreadPage {
+                                round: round.clone(),
+                                group: thread_group.name.clone(),
+                                name: name.clone(),
+                                page: x.page,
+                                tid: x.tid,
+                                thread: x.thread,
+                            })
+                            .collect::<Vec<_>>();
+                        result.append(&mut all_thread_in_the_group);
                     }
+
+                    Ok(result)
                 }
             })
             .await;
@@ -746,13 +743,8 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
             .fold(0, |acc, x| acc + x.thread.post_list.len())
     );
 
-    trace!("generating thread map template");
-    let flag_template = config.generate_thread_map();
-
-    trace!("thread map template: {flag_template:#?}");
-
     trace!("producing participation result");
-    let participation_result = produce_participation_result(reg_data, post_data, flag_template);
+    let participation_result = produce_participation_result(reg_data, post_data, config.round);
 
     trace!("producing analyze result");
     let analyze_result = produce_analyze_result(participation_result);
@@ -838,7 +830,7 @@ pub(crate) async fn load_thread_data_from_dir(path: &str) -> Result<Vec<ThreadPa
 fn produce_participation_result(
     reg_data: Vec<ThreadPageData>,
     post_data: Vec<LoadedThreadPage>,
-    flags_template: Vec<ThreadFlag>,
+    flags_template: Vec<Round>,
 ) -> Vec<UserParticipation> {
     let mut analyze_result = Vec::with_capacity(reg_data.len());
 
@@ -863,33 +855,31 @@ fn produce_participation_result(
             // this map are set to true.
             let mut flags = flags_template.clone();
 
-            for target in flags.iter_mut() {
-                trace!("analyzing round={}, name={}", target.round, target.name);
-
-                target.flag = match post_data.iter().find_map(|x| {
-                    x.find_post(
-                        target.round.as_str(),
-                        target.group.as_str(),
-                        target.name.as_str(),
-                        reg.author_id.as_str(),
-                    )
-                }) {
-                    Some(v) => {
-                        if v.author_id == reg.author_id {
-                            Participation::Ok
-                        } else {
-                            trace!(
-                                "incorrect registration on author_id: expected: {}, got {}",
-                                reg.author_id,
-                                v.author_id
-                            );
-                            Participation::Incorrect
-                        }
+            for round in flags.iter_mut() {
+                trace!("analyzing round={}", round.name);
+                for group in round.group.iter_mut() {
+                    for thread in group.thread.iter_mut() {
+                        thread.state = post_data
+                            .iter()
+                            .find_map(|x| {
+                                x.find_post(
+                                    round.name.as_str(),
+                                    group.name.as_ref(),
+                                    thread.name.as_str(),
+                                    reg.author_id.as_str(),
+                                )
+                            })
+                            .map(|_| Participation::Ok)
+                            .unwrap_or_default();
+                        trace!(
+                            "analyzing round={}, group={:?}, thread={}, flag={:?}",
+                            round.name,
+                            group.name,
+                            thread.name,
+                            thread.state
+                        );
                     }
-                    None => Participation::Missed,
-                };
-
-                trace!("updating thread flag={:?}", target.flag);
+                }
             }
 
             // Traverse finish, produce result for the user.
@@ -897,15 +887,7 @@ fn produce_participation_result(
                 username: reg.author,
                 uid: reg.author_id,
                 floor: reg.floor,
-                ok: group_thread_flag_by_round(
-                    flags.iter().filter(|x| x.flag == Participation::Ok),
-                ),
-                missed: group_thread_flag_by_round(
-                    flags.iter().filter(|x| x.flag == Participation::Missed),
-                ),
-                incorrect: group_thread_flag_by_round(
-                    flags.iter().filter(|x| x.flag == Participation::Incorrect),
-                ),
+                rounds: flags,
             });
         }
     }
