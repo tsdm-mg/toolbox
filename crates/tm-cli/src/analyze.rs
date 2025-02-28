@@ -748,9 +748,20 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
     let config: AnalyzeConfig = toml::from_str(data.as_str()).context("invalid config")?;
     trace!("{config:#?}");
 
-    let reg_data = load_thread_data_from_dir(config.registration_path.as_str())
+    let mut reg_data = load_thread_data_from_dir(config.registration_path.as_str())
         .await
         .context("failed to load registration data")?;
+
+    // Filter floors need to skip.
+    // Those floors are the ones in registration thread but used for other usage rather than sign
+    // the registration.
+    if let Some(floors_to_skip) = args.skip_reg_floors {
+        reg_data.iter_mut().for_each(|page| {
+            page.thread
+                .post_list
+                .retain_mut(|post| !floors_to_skip.contains(&post.floor))
+        });
+    };
 
     if reg_data.is_empty() {
         bail!("error: empty registration data")

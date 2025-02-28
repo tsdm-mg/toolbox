@@ -81,6 +81,14 @@ pub struct AnalyzeArgs {
         help = "file to save bbcode format participation status"
     )]
     pub save_status_path: Option<String>,
+
+    #[arg(
+        long = "skip-reg-floors",
+        help = "specify floors in registration thread, those shall be excluded from analyzing\ne.g. the first floor or second floor used for other usage rather than registration",
+        value_delimiter = ' ',
+        num_args = 1..
+    )]
+    pub skip_reg_floors: Option<Vec<usize>>,
 }
 
 #[derive(Clone, Debug, Args)]
