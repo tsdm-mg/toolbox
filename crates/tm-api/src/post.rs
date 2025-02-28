@@ -64,7 +64,7 @@ pub struct Post {
     pub first_floor: String,
 
     /// Floor number.
-    pub floor: u32,
+    pub floor: usize,
 
     /// User platform.
     ///

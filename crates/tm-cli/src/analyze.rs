@@ -335,13 +335,17 @@ struct Thread {
 
     /// Floor number of the user participation.
     #[serde(default, skip_serializing)]
-    floor: u32,
+    floor: usize,
 
     /// Post id.
     ///
     /// Record here to make a redirect link.
     #[serde(default, skip_serializing)]
     pid: String,
+
+    /// Floors violate duplicate poll rule.
+    #[serde(default, skip_serializing)]
+    duplicate: Vec<usize>,
 }
 
 impl Thread {
@@ -496,7 +500,7 @@ struct UserParticipation {
     reg_pid: String,
 
     /// Post floor number in registration thread.
-    floor: u32,
+    floor: usize,
 
     /// Pairs of round index and threads in the round.
     ///
@@ -963,7 +967,11 @@ fn produce_participation_result(
                             Some(post) => {
                                 thread.pid = post.id.clone();
                                 thread.floor = post.floor;
-                                thread.state = Participation::Ok;
+                                if thread.duplicate.contains(&post.floor) {
+                                    thread.state = Participation::Invalid;
+                                } else {
+                                    thread.state = Participation::Ok;
+                                }
                             }
                             None => {
                                 thread.state = Participation::Missed;
