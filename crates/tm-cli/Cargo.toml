@@ -19,6 +19,7 @@ chrono.workspace = true
 csv.workspace = true
 futures.workspace = true
 regex.workspace = true
+select.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

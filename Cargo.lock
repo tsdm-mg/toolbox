@@ -1987,6 +1987,7 @@ dependencies = [
  "csv",
  "futures",
  "regex",
+ "select",
  "serde",
  "serde_json",
  "tm-api",
@@ -2012,6 +2013,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "scraper",
+ "select",
  "syn 2.0.98",
 ]
 

@@ -4,9 +4,11 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use tm_api::post::{generate_find_post_link, Post as PostModel};
 use tm_api::thread::Thread as ThreadModel;
 use tm_bbcode::{bbcode, bbcode_to_string, Color, Table, TableData, TableRow, Url, WebColor};
@@ -15,6 +17,41 @@ use tracing::trace;
 
 const TABLE_WIDTH_30: usize = 30;
 const TABLE_WIDTH_110: usize = 110;
+
+/// Regex to match choice not voted.
+static UNSELECTED_RE: OnceLock<Regex> = OnceLock::new();
+
+/// Regex to match choice voted.
+static SELECTED_RE: OnceLock<Regex> = OnceLock::new();
+
+#[derive(Debug)]
+enum Choice {
+    Selected(String),
+    Unselected(String),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum ChoiceState {
+    NotDetermined,
+    Unselected,
+    Selected,
+}
+
+/// Parse the choice in poll line.
+///
+/// Use this function to validate poll result.
+///
+/// Each line shall be in the format of choices with selected state of unselected state.
+fn parse_choice(line: &str) -> Option<Choice> {
+    if let Some(capture) =
+        SELECTED_RE.get_or_init(|| Regex::new(r#"^<strong><font color="White"><font style="background-color:Orange">(?<character>[^@<]+)@(?<bangumi>.+)</font></font></strong>$"#).unwrap()).captures(line) {
+        Some(Choice::Selected(format!("{}@{}", capture.name("character").unwrap().as_str().to_string(), capture.name("bangumi").unwrap().as_str().to_string())))
+    } else if let Some(capture) = UNSELECTED_RE.get_or_init(|| Regex::new(r#"^(?<character>[^@<]+)@(?<bangumi>.+)$"#).unwrap()).captures(line) {
+        Some(Choice::Unselected(format!("{}@{}", capture.name("character").unwrap().as_str().to_string(), capture.name("bangumi").unwrap().as_str().to_string())))
+    } else {
+        None
+    }
+}
 
 /// Moe stages.
 ///
@@ -346,6 +383,32 @@ struct Thread {
     /// Floors violate duplicate poll rule.
     #[serde(default, skip_serializing)]
     duplicate: Vec<usize>,
+
+    /// All available choices in poll.
+    ///
+    /// As the poll result shall be in the given format, use this field to load allowed choice.
+    ///
+    /// The reason why each choice is a `Vec<String>` is to tolerant the correcting on choices if
+    /// the choice is spelled wrong. Users are advised to update their poll result when those wrong
+    /// choices are fixed, but what if user did not do that, when calculating result those polls
+    /// shall be considered as valid.
+    ///
+    /// ```toml
+    /// choices = [
+    ///     [
+    ///         "和泉纱雾@情色漫画老师",
+    ///         "情色漫画老师@和泉纱雾",
+    ///    ]
+    /// ]
+    /// ```
+    #[serde(skip_serializing)]
+    choices: Option<Vec<Vec<String>>>,
+
+    /// Allowed max choice count.
+    ///
+    /// The selected choices count in this thread MUST no more than the value.
+    #[serde(default, skip_serializing)]
+    max_choice: Option<usize>,
 }
 
 impl Thread {
@@ -380,6 +443,95 @@ impl Thread {
                 ))],
             )),
         }
+    }
+
+    /// Validate the poll is in correct format or not.
+    ///
+    /// `poll_data` shall be the html post body data in poll floor.
+    fn validate_poll_format(&self, poll_data: &str) -> bool {
+        let choices = match &self.choices {
+            Some(v) => v,
+            None => return true,
+        };
+        let mut flag_map = choices
+            .iter()
+            .map(|x| (x, ChoiceState::NotDetermined))
+            .collect::<HashMap<&Vec<String>, ChoiceState>>();
+
+        for poll_line in poll_data.split("<br />") {
+            match parse_choice(poll_line.trim()) {
+                Some(Choice::Unselected(ch)) => {
+                    match flag_map
+                        .iter_mut()
+                        .find(|(choices, _)| choices.contains(&ch))
+                    {
+                        None => {
+                            println!("invalid poll: thread {} floor {} has incorrect unselected choice {}", self.name, self.floor, ch);
+                            return false;
+                        }
+                        Some((_, state)) => {
+                            if *state == ChoiceState::Selected || *state == ChoiceState::Unselected
+                            {
+                                println!("invalid poll: thread {} floor {} has multiple unselected choices on {}", self.name, self.floor, ch);
+                                return false;
+                            }
+
+                            *state = ChoiceState::Unselected;
+                        }
+                    }
+                }
+                Some(Choice::Selected(ch)) => {
+                    match flag_map
+                        .iter_mut()
+                        .find(|(choices, _)| choices.contains(&ch))
+                    {
+                        None => {
+                            println!(
+                                "invalid poll: thread {} floor {} has incorrect selected choice {}",
+                                self.name, self.floor, ch
+                            );
+                            return false;
+                        }
+                        Some((_, state)) => {
+                            if *state == ChoiceState::Selected || *state == ChoiceState::Unselected
+                            {
+                                println!("invalid poll: thread {} floor {} has multiple selected choices on {}", self.name, self.floor, ch);
+                                return false;
+                            }
+
+                            *state = ChoiceState::Selected;
+                        }
+                    }
+                }
+                None => continue,
+            }
+        }
+
+        let mut selected_count = 0;
+
+        for (choice, choice_state) in flag_map {
+            match choice_state {
+                ChoiceState::NotDetermined => {
+                    println!(
+                        "invalid poll: thread {} floor {} didn't polled choice {:?}",
+                        self.name, self.floor, choice
+                    );
+                    return false;
+                }
+                ChoiceState::Selected => selected_count += 1,
+                ChoiceState::Unselected => continue,
+            }
+        }
+
+        if selected_count <= 0 || selected_count > self.max_choice.unwrap() {
+            println!(
+                "invalid poll: thread {} floor {} selected {} choices which out of range",
+                self.name, self.floor, selected_count
+            );
+            return false;
+        }
+
+        true
     }
 }
 
@@ -979,6 +1131,10 @@ fn produce_participation_result(
                                 thread.pid = post.id.clone();
                                 thread.floor = post.floor;
                                 if thread.duplicate.contains(&post.floor) {
+                                    // Duplicate floor, invalid.
+                                    thread.state = Participation::Invalid;
+                                } else if !thread.validate_poll_format(post.body.as_str()) {
+                                    // Incorrect format, invalid.
                                     thread.state = Participation::Invalid;
                                 } else {
                                     thread.state = Participation::Ok;
