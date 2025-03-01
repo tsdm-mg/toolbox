@@ -7,12 +7,14 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod analyze;
 mod cmd;
+mod config;
 mod parse;
 mod points;
 mod profile;
 mod signature;
 mod thread;
 mod utils;
+mod validate;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {

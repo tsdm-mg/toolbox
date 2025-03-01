@@ -1,6 +1,5 @@
-use crate::analyze::load_thread_data_from_dir;
 use crate::cmd::ProfileArgs;
-use crate::utils::ask_delete_if_exists;
+use crate::utils::{ask_delete_if_exists, load_thread_data_from_dir};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::time::Duration;

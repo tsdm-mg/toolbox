@@ -1,5 +1,5 @@
-use crate::analyze::load_thread_data_from_dir;
 use crate::cmd::SignatureArgs;
+use crate::utils::load_thread_data_from_dir;
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::path::PathBuf;

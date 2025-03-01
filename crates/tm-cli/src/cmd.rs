@@ -4,10 +4,10 @@ use crate::points::run_points_command;
 use crate::profile::run_profile_command;
 use crate::signature::run_signature_command;
 use crate::thread::run_thread_command;
+use crate::validate::run_validate_command;
 use anyhow::Result;
 use clap::{arg, ArgAction};
 use clap::{Args, Parser, Subcommand};
-
 ///////// Groups /////////
 
 #[derive(Clone, Debug, Args)]
@@ -146,6 +146,16 @@ pub struct PointsArgs {
     pub output: String,
 }
 
+#[derive(Clone, Debug, Args)]
+pub struct ValidateArgs {
+    #[arg(
+        short = 'c',
+        long = "config",
+        help = "path to the config file defining analyze configuration, yes use the config in analyze subcommand"
+    )]
+    pub config: String,
+}
+
 ///////// Subcommand /////////
 
 #[derive(Clone, Debug, Parser)]
@@ -173,6 +183,9 @@ pub enum Command {
 
     #[command(about = "populate points changes")]
     Points(PointsArgs),
+
+    #[command(about = "validate poll format in threads")]
+    Validate(ValidateArgs),
 }
 
 /// Main entry of all subcommands.
@@ -184,5 +197,6 @@ pub async fn run_command_with_args(cli: Cli) -> Result<()> {
         Command::Profile(profile_args) => run_profile_command(profile_args).await,
         Command::Signature(signature_args) => run_signature_command(signature_args).await,
         Command::Points(points_args) => run_points_command(points_args).await,
+        Command::Validate(validate_args) => run_validate_command(validate_args).await,
     }
 }
