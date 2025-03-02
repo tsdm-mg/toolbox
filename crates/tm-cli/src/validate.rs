@@ -66,10 +66,53 @@ pub async fn run_validate_command(args: ValidateArgs) -> Result<()> {
 
     println!("valid polls in each thread: ");
     for (thread, floors) in passed_map {
-        println!("{thread}: {floors:?}");
+        // Recording continuous ranges.
+        let mut ranges: Vec<(&usize, &usize)> = vec![];
+        // The start of range that is currently constructing.
+        let mut start: Option<&usize> = None;
+        // Previous element, use to check whether the current range ended.
+        let mut prev: Option<&usize> = None;
+        let mut floors = floors.clone();
+        floors.sort();
+
+        for f in floors.iter() {
+            match start {
+                Some(s) => match prev {
+                    Some(p) => {
+                        if *p == *f - 1 {
+                            // Continuous.
+                            prev = Some(f);
+                        } else {
+                            // Broke, generate new range.
+                            ranges.push((s, p));
+                            start = Some(f);
+                            prev = Some(f);
+                        }
+                    }
+                    None => prev = Some(f),
+                },
+                None => start = Some(f),
+            }
+        }
+
+        // Clean up the last range.
+        if let Some(s) = start {
+            ranges.push((s, prev.unwrap_or(s)));
+        }
+
+        println!("{thread}:");
+        for (start, end) in ranges {
+            print!(" ");
+            if start == end {
+                print!("{start}");
+            } else {
+                print!("{start}~{end}");
+            }
+        }
+        println!();
     }
 
-    println!("\n\n\n");
+    println!("\n");
 
     println!("invalid polls in each thread: ");
     for (thread, floors) in invalid_map {
