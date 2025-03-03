@@ -413,7 +413,11 @@ impl ThreadGroup {
                 if missed_thread.is_empty() {
                     None
                 } else {
-                    Some(format!("{group_name}【{}】", missed_thread.join("；")))
+                    if group_name.is_empty() {
+                        Some(missed_thread.join("；"))
+                    } else {
+                        Some(format!("{group_name}【{}】", missed_thread.join("；")))
+                    }
                 }
             }
             None => match self.thread[0].state {
@@ -444,7 +448,11 @@ impl ThreadGroup {
             .collect::<Vec<_>>();
 
         if let Some(name) = self.name.as_ref() {
-            format!("{}【{}】", name, code_vec.join("；"))
+            if name.is_empty() {
+                code_vec.join("；")
+            } else {
+                format!("{}【{}】", name, code_vec.join("；"))
+            }
         } else {
             code_vec.join("；")
         }
