@@ -673,7 +673,9 @@ impl LoadedThreadPage {
     /// Find the post by the author's uid.
     ///
     /// Only find in target round and group to avoid evaluating result from incorrect threads.
-    pub(crate) fn find_post(
+    ///
+    /// **Skip the first floor**
+    pub(crate) fn find_post_not_first_floor(
         &self,
         round: &str,
         group: Option<&String>,
@@ -684,7 +686,10 @@ impl LoadedThreadPage {
             return None;
         }
 
-        self.thread.post_list.iter().find(|x| x.author_id == uid)
+        self.thread
+            .post_list
+            .iter()
+            .find(|x| x.author_id == uid && x.floor != 1)
     }
 }
 

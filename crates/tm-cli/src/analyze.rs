@@ -396,7 +396,7 @@ fn produce_participation_result(
                 for group in round.group.iter_mut() {
                     for thread in group.thread.iter_mut() {
                         match post_data.iter().find_map(|x| {
-                            x.find_post(
+                            x.find_post_not_first_floor(
                                 round.name.as_str(),
                                 group.name.as_ref(),
                                 thread.name.as_str(),
