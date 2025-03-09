@@ -9,6 +9,8 @@ use tm_api::post::{generate_find_post_link, Post as PostModel};
 use tm_api::thread::Thread as ThreadModel;
 use tm_bbcode::{bbcode_to_string, Color, Url, WebColor};
 
+pub const DUPLICATE_INFO: &str = "重复楼层";
+
 /// Describe the thread usage.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) enum ThreadType {

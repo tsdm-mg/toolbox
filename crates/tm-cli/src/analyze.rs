@@ -1,12 +1,12 @@
 use crate::cmd::AnalyzeArgs;
-use crate::config::{Config, LoadedThreadPage, Participation, RewardPolicy, Round};
+use crate::config::{Config, LoadedThreadPage, Participation, RewardPolicy, Round, DUPLICATE_INFO};
 use crate::utils::{load_thread_data_from_dir, ThreadPageData};
 use anyhow::{bail, Context, Result};
 use std::cmp::Ordering;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use tm_api::post::generate_find_post_link;
-use tm_bbcode::{bbcode, bbcode_to_string, Table, TableData, TableRow, Url};
+use tm_bbcode::{bbcode, bbcode_to_string, Color, Table, TableData, TableRow, Url, WebColor};
 use tokio::fs;
 use tracing::trace;
 
@@ -32,22 +32,30 @@ pub(crate) struct UserParticipation {
     ///
     /// [Round]s in this field is expected in the sort of the ones from external data source, the
     /// sort shall not be rearranged otherwise may break group order.
-    pub rounds: Vec<Round>,
+    ///
+    /// A `None` value indicates user has duplicate registraion on current floor.
+    pub rounds: Option<Vec<Round>>,
 }
 
 impl UserParticipation {
     /// Count rounds that not completely participated in.
     pub(crate) fn count_missing_rounds(&self) -> usize {
-        self.rounds.iter().filter(|x| x.is_missed()).count()
+        match &self.rounds {
+            Some(v) => v.iter().filter(|x| x.is_missed()).count(),
+            None => 100,
+        }
     }
 
     /// Generate rounds info text.
     pub(crate) fn missed_info(&self, indent: usize) -> String {
-        self.rounds
-            .iter()
-            .filter_map(|x| x.missed_info(indent))
-            .collect::<Vec<_>>()
-            .join("\n")
+        match &self.rounds {
+            Some(v) => v
+                .iter()
+                .filter_map(|x| x.missed_info(indent))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            None => DUPLICATE_INFO.to_string(),
+        }
     }
 
     /// Generate a single record.
@@ -73,8 +81,17 @@ impl UserParticipation {
     }
 
     pub(crate) fn generate_bbcode(&self) -> TableData {
+        if self.rounds.is_none() {
+            return TableData::no_size(vec![Box::new(Color::new(
+                WebColor::DarkRed,
+                vec![Box::new(DUPLICATE_INFO)],
+            ))]);
+        }
+
         let data = self
             .rounds
+            .as_ref()
+            .unwrap()
             .iter()
             .enumerate()
             .map(|(idx, x)| x.generate_bbcode(idx + 1))
@@ -371,10 +388,10 @@ fn produce_participation_result(
     let mut analyze_result = Vec::with_capacity(reg_data.len());
 
     trace!("traversing registration data");
-    for (reg_page_number, reg_page) in reg_data.into_iter().enumerate() {
+    for (reg_page_number, reg_page) in reg_data.iter().enumerate() {
         trace!("traversing registration data page={}", reg_page_number);
         // Each reg is a post in the registration thread, where one user registered.
-        for reg in reg_page.thread.post_list.into_iter() {
+        for reg in reg_page.thread.post_list.iter() {
             trace!(
                 "checking registration data floor={}, user={}, uid={}",
                 reg.floor,
@@ -386,6 +403,34 @@ fn produce_participation_result(
                 // Skip the first floor, it is the announcement.
                 continue;
             }
+
+            // Find the current registration's user again, try to find the first occurred one.
+            // If the position is not same, then the current registration is a duplicate one.
+            let maybe_another_reg = reg_data
+                .iter()
+                .find_map(|page| {
+                    page.thread
+                        .post_list
+                        .iter()
+                        .find(|post| post.author_id == reg.author_id)
+                        .map(|p| p.floor)
+                })
+                .unwrap();
+            if maybe_another_reg != reg.floor {
+                // Found another in the registration floor has the save author, so current one
+                // is duplicate.
+                // Traverse finish, produce result for the user.
+                analyze_result.push(UserParticipation {
+                    username: reg.author.clone(),
+                    uid: reg.author_id.clone(),
+                    floor: reg.floor.clone(),
+                    reg_pid: reg.id.clone(),
+                    // A `None` value means duplicate floor.
+                    rounds: None,
+                });
+                continue;
+            }
+
             // Map to store check result.
             // A user is considered to completely participated in the stage only if all flags in
             // this map are set to true.
@@ -433,11 +478,11 @@ fn produce_participation_result(
 
             // Traverse finish, produce result for the user.
             analyze_result.push(UserParticipation {
-                username: reg.author,
-                uid: reg.author_id,
-                floor: reg.floor,
-                reg_pid: reg.id,
-                rounds: flags,
+                username: reg.author.clone(),
+                uid: reg.author_id.clone(),
+                floor: reg.floor.clone(),
+                reg_pid: reg.id.clone(),
+                rounds: Some(flags),
             });
         }
     }
