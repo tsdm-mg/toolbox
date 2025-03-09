@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use regex::Regex;
 use std::path::PathBuf;
 use tm_api::profile::Profile;
-use tm_types::{BASE_URL, BASE_URL2};
 use tokio::fs;
 
 pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
@@ -15,11 +14,17 @@ pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
     println!("loaded {} profiles", profiles.len());
 
     let mut users_have_content = Vec::<Profile>::new();
+    let _ = Regex::new(
+        r#"href="https://(www\.)?tsdm39\.(com|net)/forum\.php\?mod=viewthread&amp;tid=tid"#,
+    );
 
-    let targets = [
-        format!("href=\"{BASE_URL}/forum.php?mod=viewthread&amp;tid={tid}"),
-        format!("href=\"{BASE_URL2}/forum.php?mod=viewthread&amp;tid={tid}"),
-    ];
+    let target = Regex::new(
+        format!(
+            r#"href="https://(www\.)?tsdm39\.(com|net)/forum\.php\?mod=viewthread&amp;tid={tid}"#
+        )
+        .as_str(),
+    )
+    .expect("invalid target url regex");
 
     for profile in profiles {
         let signature = match profile.signature {
@@ -27,7 +32,7 @@ pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
             None => continue,
         };
 
-        if targets.iter().any(|x| signature.contains(x)) {
+        if target.is_match(signature.as_str()) {
             users_have_content.push(profile.clone());
             continue;
         }
