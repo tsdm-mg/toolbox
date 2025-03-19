@@ -210,6 +210,8 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
         .await
         .context("failed to populate increment data")?;
 
+    println!("changes count: {}", changes.len());
+
     let extra_changes = if let Some(extra_path) = args.extra_changes {
         populate_extra_record(extra_path)
             .await
@@ -262,6 +264,7 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
 /// Records in the that data are only expected to have poll points and energy, none special points.
 async fn populate_increment_record(data_path: String) -> Result<Vec<IncrementRecord>> {
     let mut csv = csv::ReaderBuilder::new()
+        .has_headers(false)
         .double_quote(true)
         .from_path(data_path)?;
 
@@ -271,7 +274,7 @@ async fn populate_increment_record(data_path: String) -> Result<Vec<IncrementRec
     let mut records = vec![];
 
     // Skip the title row.
-    for maybe_record in csv.records().into_iter().skip(1) {
+    for maybe_record in csv.records().into_iter() {
         let record = match maybe_record {
             Ok(v) => v,
             Err(e) => return Err(anyhow!("invalid increment record: {}", e)),
