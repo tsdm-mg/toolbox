@@ -65,6 +65,11 @@ struct PointsRecord {
 
     /// Energy value.
     energy: i32,
+
+    /// Special reward for users reach 100 total points.
+    ///
+    /// Flag to records that.
+    reach_100_points: bool,
 }
 
 impl PointsRecord {
@@ -72,10 +77,26 @@ impl PointsRecord {
         Regex::new(r#"\[tr]\[td](?<username>[^\[]+)\[/td]\[td](?<points>\d+)\[/td]\[td](?<threads_count>\d+)\[/td]\[td](?<threads_points>\d+)\[/td]\[td](?<special_points>\d+)\[/td]\[td](?<poll_points>\d+)\[/td]\[td](?<energy>\d+)\[/td]\[/tr]"#).unwrap()
     }
 
+    /// Update total points.
+    ///
+    /// Also, for users reached 100 total points, set the special flag to `true`.
     fn update_points(&mut self) {
+        let old_points = self.points;
         self.points = self.threads_points + self.special_points + self.poll_points;
+
+        if old_points < 100 && self.points >= 100 {
+            self.reach_100_points = true;
+            println!(
+                "{} reaches 100 total points (increased {})",
+                self.username,
+                self.points < old_points
+            );
+        }
     }
 
+    /// Apply points change to user record.
+    ///
+    /// This step calculates the latest points for a given user specified by `change.username`.
     fn apply_change(&mut self, change: &IncrementRecord) {
         if self.username != change.username {
             return;
@@ -132,6 +153,7 @@ impl PointsRecord {
             special_points,
             poll_points,
             energy,
+            reach_100_points: false,
         })
     }
 
@@ -152,6 +174,7 @@ impl From<&IncrementRecord> for PointsRecord {
             poll_points: value.poll_points,
             special_points: value.special_points,
             energy: value.energy,
+            reach_100_points: false,
         }
     }
 }
@@ -245,6 +268,17 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
     // println!("General users points after update: {general_data:#?}");
 
     let bbcode_result = generate_bbcode_result(&workgroup_data, &general_data);
+
+    println!("users reached 100 total points:");
+    for user_record in workgroup_data.iter().filter(|x| x.reach_100_points) {
+        // TODO: Use BBCode macro.
+        println!("{}", user_record.username);
+    }
+    for user_record in general_data.iter().filter(|x| x.reach_100_points) {
+        // TODO: Use BBCode macro.
+        println!("{}", user_record.username);
+    }
+    println!();
 
     let mut file = OpenOptions::new()
         .write(true)
