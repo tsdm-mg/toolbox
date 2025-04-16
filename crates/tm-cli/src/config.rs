@@ -11,6 +11,9 @@ use tm_bbcode::{bbcode_to_string, Color, Url, WebColor};
 
 pub const DUPLICATE_INFO: &str = "重复楼层";
 
+/// Floors in thread will have this content if is the post floor is banned.
+const BLOCKED_FLOOR_CONTENT: &str = "<content-info code=\"message_single_banned\" />";
+
 /// Describe the thread usage.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) enum ThreadType {
@@ -677,6 +680,8 @@ impl LoadedThreadPage {
     /// Only find in target round and group to avoid evaluating result from incorrect threads.
     ///
     /// **Skip the first floor**
+    ///
+    /// Skip the floor that is blocked, which shall have the content of [`BLOCKED_FLOOR_CONTENT`]
     pub(crate) fn find_post_not_first_floor(
         &self,
         round: &str,
@@ -691,7 +696,7 @@ impl LoadedThreadPage {
         self.thread
             .post_list
             .iter()
-            .find(|x| x.author_id == uid && x.floor != 1)
+            .find(|x| x.author_id == uid && x.floor != 1 && x.body != BLOCKED_FLOOR_CONTENT)
     }
 }
 
