@@ -6,7 +6,8 @@ use std::cmp::Ordering;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use tm_api::post::generate_find_post_link;
-use tm_bbcode::{bbcode, bbcode_to_string, Color, Table, TableData, TableRow, Url, WebColor};
+use tm_bbcode_macro::bbx;
+use tm_bbcode_webcolor::WebColor;
 use tokio::fs;
 use tracing::trace;
 
@@ -33,7 +34,7 @@ pub(crate) struct UserParticipation {
     /// [Round]s in this field is expected in the sort of the ones from external data source, the
     /// sort shall not be rearranged otherwise may break group order.
     ///
-    /// A `None` value indicates user has duplicate registraion on current floor.
+    /// A `None` value indicates user has duplicate registration on current floor.
     pub rounds: Option<Vec<Round>>,
 }
 
@@ -80,12 +81,16 @@ impl UserParticipation {
         ]
     }
 
-    pub(crate) fn generate_bbcode(&self) -> TableData {
+    pub(crate) fn generate_bbcode(&self) -> String {
         if self.rounds.is_none() {
-            return TableData::no_size(vec![Box::new(Color::new(
-                WebColor::DarkRed,
-                vec![Box::new(DUPLICATE_INFO)],
-            ))]);
+            return bbx!(
+              td {
+                  color {
+                      { WebColor::DarkRed },
+                      DUPLICATE_INFO,
+                  }
+              }
+            );
         }
 
         let data = self
@@ -97,7 +102,8 @@ impl UserParticipation {
             .map(|(idx, x)| x.generate_bbcode(idx + 1))
             .collect::<Vec<_>>()
             .join("\n");
-        TableData::no_size(vec![Box::new(data)])
+
+        bbx!(td { data })
     }
 }
 
@@ -259,27 +265,35 @@ impl AnalyzeResult {
     }
 
     /// Build a bbcode table describing user participation status.
-    fn generate_participation_table(&self) -> Table {
+    fn generate_participation_table(&self) -> String {
         let records = self.combine_and_sort();
-        let mut table = vec![TableRow::new(vec![
-            TableData::with_size(TABLE_WIDTH_30, bbcode!("楼层")),
-            TableData::with_size(TABLE_WIDTH_110, bbcode!("ID")),
-            TableData::no_size(bbcode!("参与情况")),
-        ])];
-        for p in records.iter() {
-            let row = TableRow::new(vec![
-                TableData::no_size(vec![Box::new(Url::new(
-                    generate_find_post_link(p.reg_pid.as_str()),
-                    vec![Box::new(format!("{}", p.floor))],
-                ))]),
-                TableData::no_size(vec![Box::new(p.username.clone())]),
-                p.generate_bbcode(),
-            ]);
+        let table_header = bbx!(
+              tr {
+                    td { {TABLE_WIDTH_30}, "楼层" },
+                    td { {TABLE_WIDTH_110}, "ID" },
+                    td { "参与情况" }
+                },
+            );
+        let mut table_data = table_header;
 
-            table.push(row);
+        for p in records.iter() {
+            let row = bbx!(
+                tr {
+                    td {
+                        url {
+                          { generate_find_post_link(p.reg_pid.as_str()) },
+                           p.floor.to_string(),
+                        },
+                    },
+                    td { p.username.clone() },
+                    p.generate_bbcode(),
+                }
+            );
+
+            table_data.push_str(row.as_str());
         }
 
-        Table::new(table)
+        bbx! { table { table_data } }
     }
 }
 
@@ -366,9 +380,7 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
             .create(true)
             .truncate(true)
             .open(status_path.clone())?;
-        let table = analyze_result.generate_participation_table();
-
-        let data = bbcode_to_string(&table);
+        let data = analyze_result.generate_participation_table();
         let mut writer = BufWriter::new(file);
         writer
             .write_all(data.as_bytes())

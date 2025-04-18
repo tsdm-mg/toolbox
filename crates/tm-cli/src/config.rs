@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use tm_api::post::{generate_find_post_link, Post as PostModel};
 use tm_api::thread::Thread as ThreadModel;
-use tm_bbcode::{bbcode_to_string, Color, Url, WebColor};
+use tm_bbcode_macro::bbx;
+use tm_bbcode_webcolor::WebColor;
 
 pub const DUPLICATE_INFO: &str = "重复楼层";
 
@@ -534,10 +535,12 @@ impl Thread {
     /// * [Participation::Invalid] `[url=${FLOOR_LINK}][color=DarkRed]${THREAD_NAME}#${FLOOR}[/color][/url]`
     pub fn generate_bbcode(&self) -> String {
         match self.state {
-            Participation::Ok => bbcode_to_string(&Url::new(
-                generate_find_post_link(self.pid.as_str()),
-                vec![Box::new(format!("{}#{}", self.name.as_str(), self.floor))],
-            )),
+            Participation::Ok => bbx!(
+              url {
+                  { generate_find_post_link(self.pid.as_str()) },
+                  ("{}#{}", self.name.as_str(), self.floor),
+              }
+            ),
             Participation::Missed => {
                 // With color
                 // bbcode_to_string(&Color::new(
@@ -548,13 +551,15 @@ impl Thread {
                 // Without color
                 self.name.clone()
             }
-            Participation::Invalid => bbcode_to_string(&Url::new(
-                generate_find_post_link(self.pid.as_str()),
-                vec![Box::new(Color::new(
-                    WebColor::DarkRed,
-                    vec![Box::new(format!("{}#{}", self.name.as_str(), self.floor))],
-                ))],
-            )),
+            Participation::Invalid => bbx!(
+                url {
+                    { generate_find_post_link(self.pid.as_str()) },
+                    color {
+                        { WebColor::DarkRed },
+                        ("{}#{}", self.name.as_str(), self.floor) ,
+                    }
+                }
+            ),
         }
     }
 

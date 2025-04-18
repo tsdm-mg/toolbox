@@ -314,6 +314,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "demo-parser"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "tm-bbcode-macro",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1971,7 +1979,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "tm-bbcode"
+name = "tm-bbcode-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+ "tm-bbcode-webcolor",
+]
+
+[[package]]
+name = "tm-bbcode-macro-tests"
+version = "0.1.0"
+dependencies = [
+ "tm-bbcode-macro",
+]
+
+[[package]]
+name = "tm-bbcode-webcolor"
 version = "0.1.0"
 dependencies = [
  "racros",
@@ -1987,12 +2012,11 @@ dependencies = [
  "csv",
  "futures",
  "regex",
- "select",
  "serde",
  "serde_json",
  "tm-api",
- "tm-bbcode",
- "tm-types",
+ "tm-bbcode-macro",
+ "tm-bbcode-webcolor",
  "tokio",
  "toml",
  "tracing",

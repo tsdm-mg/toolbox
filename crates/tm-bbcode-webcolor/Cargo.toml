@@ -1,0 +1,12 @@
+[package]
+name = "tm-bbcode-webcolor"
+version.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+racros.workspace = true

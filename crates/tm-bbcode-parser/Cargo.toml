@@ -1,0 +1,9 @@
+[package]
+name = "demo-parser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tm-bbcode-macro.workspace = true
+
+proc-macro2.workspace = true

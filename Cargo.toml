@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "crates/tm-api",
-    "crates/tm-bbcode",
+    "crates/tm-bbcode-macro", "crates/tm-bbcode-macro-tests",
+    "crates/tm-bbcode-parser", "crates/tm-bbcode-webcolor",
     "crates/tm-cli",
     "crates/tm-html",
     "crates/tm-macros",
@@ -20,7 +21,9 @@ rust-version = "1.73.0"
 
 [workspace.dependencies]
 tm-api = { path = "crates/tm-api" }
-tm-bbcode = { path = "crates/tm-bbcode" }
+tm-bbcode-macro = { path = "crates/tm-bbcode-macro" }
+tm-bbcode-parser = { path = "crates/tm-bbcode-parser" }
+tm-bbcode-webcolor = { path = "crates/tm-bbcode-webcolor" }
 tm-html = { path = "crates/tm-html" }
 tm-macros = { path = "crates/tm-macros" }
 tm-types = { path = "crates/tm-types" }

@@ -10,8 +10,8 @@ rust-version.workspace = true
 
 [dependencies]
 tm-api.workspace = true
-tm-bbcode.workspace = true
-tm-types.workspace = true
+tm-bbcode-macro.workspace = true
+tm-bbcode-webcolor.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
@@ -19,7 +19,6 @@ chrono.workspace = true
 csv.workspace = true
 futures.workspace = true
 regex.workspace = true
-select.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
