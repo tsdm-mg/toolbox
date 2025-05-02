@@ -486,9 +486,9 @@ fn generate_bbcode_result(
         .join("\n");
 
     // Line A is 0.3%
-    let line_a = general_data[(general_data.len() as f64 * 0.003).ceil() as usize].points;
+    let line_a = general_data[(general_data.len() as f64 * 0.003).ceil() as usize - 1].points;
     // Line B is 1%
-    let line_b = general_data[(general_data.len() as f64 * 0.01).ceil() as usize].points;
+    let line_b = general_data[(general_data.len() as f64 * 0.01).ceil() as usize - 1].points;
 
     [
         bbx!(
