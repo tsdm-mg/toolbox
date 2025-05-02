@@ -108,7 +108,6 @@ impl Parse for Text {
             return Ok(Self::FormattedArgs(input.parse()?));
         }
 
-
         Err(syn::Error::new(input.span(), "invalid text"))
     }
 }
@@ -116,8 +115,7 @@ impl Parse for Text {
 impl BBCode for Text {
     fn to_bbcode(&self, tokens: &mut Vec<proc_macro2::TokenStream>) {
         match self {
-            Text::TextExpr(v) =>
-                tokens.push(v.to_token_stream()),
+            Text::TextExpr(v) => tokens.push(v.to_token_stream()),
             Text::FormattedArgs(v) => v.to_bbcode(tokens),
         }
     }

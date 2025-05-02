@@ -20,7 +20,7 @@ static POINTS_RECORD_RE: OnceLock<Regex> = OnceLock::new();
 ///         td { {64}, "发帖积分", },
 ///         td { {64}, "特殊积分", },
 ///         td { {64}, "投票积分", },
-///         td { {64}, "能量值", },
+///         td { {51}, "能量值", },
 ///     }
 /// ).as_str(),
 const TABLE_HEADER: &str = "[tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
@@ -277,7 +277,6 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
 
     let bbcode_result = generate_bbcode_result(&workgroup_data, &general_data);
 
-
     println!("users reached 100 total points:");
     for user_record in workgroup_data.iter().filter(|x| x.reach_100_points) {
         // TODO: Use BBCode macro.
@@ -482,57 +481,58 @@ fn generate_bbcode_result(
     // Line B is 1%
     let line_b = general_data[(general_data.len() as f64 * 0.01).ceil() as usize - 1].points;
 
-        bbx!(
-            font {
-                {"黑体"},
-                color {
-                    {"#000000"},
-                    b { "特殊积分指特殊活动期间获得的萌战积分。" }
-                },
+    let header = generate_header();
+
+    bbx!(
+        font {
+            {"黑体"},
+            color {
+                {"#000000"},
+                b { "特殊积分指特殊活动期间获得的萌战积分。" }
             },
-            "\n\n",
-            b {
-                color {
-                    {WebColor::Red},
-                    size {
-                        {3},
-                        "\n",
-                        ("❤ 萌战版块荣耀成就B线：{}分\n", line_b),
-                        ("❤ 萌战版块荣耀成就A线：{}分\n", line_a),
-                    }
+        },
+        "\n\n",
+        b {
+            color {
+                {WebColor::Red},
+                size {
+                    {3},
+                    "\n",
+                    ("❤ 萌战版块荣耀成就B线：{}分\n", line_b),
+                    ("❤ 萌战版块荣耀成就A线：{}分\n", line_a),
                 }
-            },
-            "\n",
-            table {
-                "\n",
-                tr {
-                    td { {72}, "ID", },
-                    td { {64}, "萌战总积分", },
-                    td { {64}, "发帖数量", },
-                    td { {64}, "发帖积分", },
-                    td { {64}, "特殊积分", },
-                    td { {64}, "投票积分", },
-                    td { {51}, "能量值", },
-                },
-                "\n",
-                workgroup_lines.as_str(),
-                "\n",
-            },
-            "\n\n",
-            table {
-                "\n",
-                tr {
-                    td { {72}, "ID", },
-                    td { {64}, "萌战总积分", },
-                    td { {64}, "发帖数量", },
-                    td { {64}, "发帖积分", },
-                    td { {64}, "特殊积分", },
-                    td { {64}, "投票积分", },
-                    td { {51}, "能量值", },
-                },
-                "\n",
-                general_lines.as_str(),
-                "\n",
             }
-        )
+        },
+        "\n",
+        table {
+            "\n",
+            ("{}", header),
+            "\n",
+            workgroup_lines.as_str(),
+            "\n",
+        },
+        "\n\n",
+        table {
+            "\n",
+            ("{}", header),
+            "\n",
+            general_lines.as_str(),
+            "\n",
+        }
+    )
+}
+
+/// Header row in points table.
+fn generate_header() -> String {
+    bbx!(
+        tr {
+            td { {72}, "ID", },
+            td { {64}, "萌战总积分", },
+            td { {64}, "发帖数量", },
+            td { {64}, "发帖积分", },
+            td { {64}, "特殊积分", },
+            td { {64}, "投票积分", },
+            td { {51}, "能量值", },
+        },
+    )
 }

@@ -268,12 +268,12 @@ impl AnalyzeResult {
     fn generate_participation_table(&self) -> String {
         let records = self.combine_and_sort();
         let table_header = bbx!(
-              tr {
-                    td { {TABLE_WIDTH_30}, "楼层" },
-                    td { {TABLE_WIDTH_110}, "ID" },
-                    td { "参与情况" }
-                },
-            );
+          tr {
+                td { {TABLE_WIDTH_30}, "楼层" },
+                td { {TABLE_WIDTH_110}, "ID" },
+                td { "参与情况" }
+            },
+        );
         let mut table_data = table_header;
 
         for p in records.iter() {
