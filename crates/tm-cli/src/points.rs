@@ -267,7 +267,11 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
     // println!("Workgroup users points after update: {workgroup_data:#?}");
     // println!("General users points after update: {general_data:#?}");
 
+    workgroup_data.sort_by(|a, b| b.points.cmp(&a.points));
+    general_data.sort_by(|a, b| b.points.cmp(&a.points));
+
     let bbcode_result = generate_bbcode_result(&workgroup_data, &general_data);
+
 
     println!("users reached 100 total points:");
     for user_record in workgroup_data.iter().filter(|x| x.reach_100_points) {
