@@ -6,17 +6,30 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::OnceLock;
+use tm_bbcode_macro::bbx;
+use tm_bbcode_webcolor::WebColor;
 use tokio::fs;
 
 static POINTS_RECORD_RE: OnceLock<Regex> = OnceLock::new();
 
+/// bbx!(
+///     tr {
+///         td { {72}, "ID", },
+///         td { {64}, "萌战总积分", },
+///         td { {64}, "发帖数量", },
+///         td { {64}, "发帖积分", },
+///         td { {64}, "特殊积分", },
+///         td { {64}, "投票积分", },
+///         td { {64}, "能量值", },
+///     }
+/// ).as_str(),
 const TABLE_HEADER: &str = "[tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
 
 const POINTS_TABLE_HEAD: &str = "[font=黑体][color=#000000][b]特殊积分指特殊活动期间获得的萌战积分。[/b][/color][/font]
 
 [b][color=Red][size=3]
-❤ 萌战版块荣耀成就B线：380分
-❤ 萌战版块荣耀成就A线：443分
+❤ 萌战版块荣耀成就B线：{}
+❤ 萌战版块荣耀成就A线：{}
 [/size][/color][/b]
 [table]
 [tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
@@ -472,8 +485,36 @@ fn generate_bbcode_result(
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Line A is 0.3%
+    let line_a = general_data[(general_data.len() as f64 * 0.003).ceil() as usize].points;
+    // Line B is 1%
+    let line_b = general_data[(general_data.len() as f64 * 0.01).ceil() as usize].points;
+
     [
-        POINTS_TABLE_HEAD,
+        bbx!(
+            font {
+                {"黑体"},
+                color {
+                    {"#000000"},
+                    b { "特殊积分指特殊活动期间获得的萌战积分。" }
+                },
+            },
+            "\n\n",
+            b {
+                color {
+                    {WebColor::Red},
+                    size {
+                        {3},
+                        "\n",
+                        ("❤ 萌战版块荣耀成就B线：{}分\n", line_b),
+                        ("❤ 萌战版块荣耀成就A线：{}分\n", line_a),
+                    }
+                }
+            },
+            "\n",
+            "[table]\n",
+            TABLE_HEADER
+        ).as_str(),
         workgroup_lines.as_str(),
         POINTS_TABLE_MID,
         general_lines.as_str(),
