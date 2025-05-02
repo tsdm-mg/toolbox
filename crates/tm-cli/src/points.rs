@@ -25,22 +25,6 @@ static POINTS_RECORD_RE: OnceLock<Regex> = OnceLock::new();
 /// ).as_str(),
 const TABLE_HEADER: &str = "[tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
 
-const POINTS_TABLE_HEAD: &str = "[font=黑体][color=#000000][b]特殊积分指特殊活动期间获得的萌战积分。[/b][/color][/font]
-
-[b][color=Red][size=3]
-❤ 萌战版块荣耀成就B线：{}
-❤ 萌战版块荣耀成就A线：{}
-[/size][/color][/b]
-[table]
-[tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
-
-const POINTS_TABLE_MID: &str = "[/table]
-
-[table]
-[tr][td=72]ID[/td][td=64]萌战总积分[/td][td=64]发帖数量[/td][td=64]发帖积分[/td][td=64]特殊积分[/td][td=64]投票积分[/td][td=51]能量值[/td][/tr]";
-
-const POINTS_TABLE_TAIL: &str = "[/table]";
-
 type ChangesMap = HashMap<String, IncrementRecord>;
 
 // TODO: Serialize and deserialize through bbcode semantics parsing.
@@ -171,8 +155,16 @@ impl PointsRecord {
     }
 
     fn to_line(&self) -> String {
-        format!("[tr][td]{}[/td][td]{}[/td][td]{}[/td][td]{}[/td][td]{}[/td][td]{}[/td][td]{}[/td][/tr]",
-                self.username, self.points, self.threads_count, self.threads_points, self.special_points, self.poll_points, self.energy,
+        bbx!(
+            tr {
+                td { ("{}", self.username) },
+                td { ("{}", self.points) },
+                td { ("{}", self.threads_count) },
+                td { ("{}", self.threads_points) },
+                td { ("{}", self.special_points) },
+                td { ("{}", self.poll_points) },
+                td { ("{}", self.energy) },
+            }
         )
     }
 }
@@ -490,7 +482,6 @@ fn generate_bbcode_result(
     // Line B is 1%
     let line_b = general_data[(general_data.len() as f64 * 0.01).ceil() as usize - 1].points;
 
-    [
         bbx!(
             font {
                 {"黑体"},
@@ -512,13 +503,36 @@ fn generate_bbcode_result(
                 }
             },
             "\n",
-            "[table]\n",
-            TABLE_HEADER
-        ).as_str(),
-        workgroup_lines.as_str(),
-        POINTS_TABLE_MID,
-        general_lines.as_str(),
-        POINTS_TABLE_TAIL,
-    ]
-    .join("\n")
+            table {
+                "\n",
+                tr {
+                    td { {72}, "ID", },
+                    td { {64}, "萌战总积分", },
+                    td { {64}, "发帖数量", },
+                    td { {64}, "发帖积分", },
+                    td { {64}, "特殊积分", },
+                    td { {64}, "投票积分", },
+                    td { {51}, "能量值", },
+                },
+                "\n",
+                workgroup_lines.as_str(),
+                "\n",
+            },
+            "\n\n",
+            table {
+                "\n",
+                tr {
+                    td { {72}, "ID", },
+                    td { {64}, "萌战总积分", },
+                    td { {64}, "发帖数量", },
+                    td { {64}, "发帖积分", },
+                    td { {64}, "特殊积分", },
+                    td { {64}, "投票积分", },
+                    td { {51}, "能量值", },
+                },
+                "\n",
+                general_lines.as_str(),
+                "\n",
+            }
+        )
 }
