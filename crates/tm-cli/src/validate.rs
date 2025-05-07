@@ -42,7 +42,7 @@ pub async fn run_validate_command(args: ValidateArgs) -> Result<()> {
                     &x.round == round && x.group.as_ref() == group.as_ref() && &x.name == name
                 }) {
                     for post in &t.thread.post_list {
-                        let target_map = if thread.validate_poll_format(post.body.as_str()) {
+                        let target_map = if thread.validate_poll_format(post.body.as_str(), post.floor) {
                             // Validate poll result.
                             &mut passed_map
                         } else {

@@ -566,7 +566,7 @@ impl Thread {
     /// Validate the poll is in correct format or not.
     ///
     /// `poll_data` shall be the html post body data in poll floor.
-    pub fn validate_poll_format(&self, poll_data: &str) -> bool {
+    pub fn validate_poll_format(&self, poll_data: &str, post_floor: usize) -> bool {
         let choices = match &self.choices {
             Some(v) => v,
             None => return true,
@@ -584,13 +584,13 @@ impl Thread {
                         .find(|(choices, _)| choices.contains(&ch))
                     {
                         None => {
-                            println!("invalid poll: thread {} floor {} has incorrect unselected choice {}", self.name, self.floor, ch);
+                            println!("invalid poll: thread {} floor {} has incorrect unselected choice {}", self.name, post_floor, ch);
                             return false;
                         }
                         Some((_, state)) => {
                             if *state == ChoiceState::Selected || *state == ChoiceState::Unselected
                             {
-                                println!("invalid poll: thread {} floor {} has multiple unselected choices on {}", self.name, self.floor, ch);
+                                println!("invalid poll: thread {} floor {} has multiple unselected choices on {}", self.name, post_floor, ch);
                                 return false;
                             }
 
@@ -606,14 +606,14 @@ impl Thread {
                         None => {
                             println!(
                                 "invalid poll: thread {} floor {} has incorrect selected choice {}",
-                                self.name, self.floor, ch
+                                self.name, post_floor, ch
                             );
                             return false;
                         }
                         Some((_, state)) => {
                             if *state == ChoiceState::Selected || *state == ChoiceState::Unselected
                             {
-                                println!("invalid poll: thread {} floor {} has multiple selected choices on {}", self.name, self.floor, ch);
+                                println!("invalid poll: thread {} floor {} has multiple selected choices on {}", self.name, post_floor, ch);
                                 return false;
                             }
 
@@ -631,8 +631,8 @@ impl Thread {
             match choice_state {
                 ChoiceState::NotDetermined => {
                     println!(
-                        "invalid poll: thread {} floor {} didn't polled choice {:?}",
-                        self.name, self.floor, choice
+                        "invalid poll: thread {} floor {} didn't poll choice {:?}",
+                        self.name, post_floor, choice
                     );
                     return false;
                 }
@@ -644,7 +644,7 @@ impl Thread {
         if selected_count <= 0 || selected_count > self.max_choice.unwrap() {
             println!(
                 "invalid poll: thread {} floor {} selected {} choices which out of range",
-                self.name, self.floor, selected_count
+                self.name, post_floor, selected_count
             );
             return false;
         }

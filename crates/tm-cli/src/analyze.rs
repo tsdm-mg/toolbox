@@ -466,7 +466,7 @@ fn produce_participation_result(
                                 if thread.duplicate.contains(&post.floor) {
                                     // Duplicate floor, invalid.
                                     thread.state = Participation::Invalid;
-                                } else if !thread.validate_poll_format(post.body.as_str()) {
+                                } else if !thread.validate_poll_format(post.body.as_str(), post.floor) {
                                     // Incorrect format, invalid.
                                     thread.state = Participation::Invalid;
                                 } else {
