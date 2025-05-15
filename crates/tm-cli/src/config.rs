@@ -493,7 +493,13 @@ pub(crate) struct Thread {
 
     /// Floors violate duplicate poll rule.
     #[serde(default, skip_serializing)]
-    pub duplicate: Vec<usize>,
+    pub duplicate: Option<Vec<usize>>,
+
+    /// Floors revised as a valid poll.
+    ///
+    /// Sometimes it goes here, tolerance it.
+    #[serde(skip_serializing)]
+    pub revised: Option<Vec<usize>>,
 
     /// All available choices in poll.
     ///

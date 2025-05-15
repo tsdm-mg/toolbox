@@ -42,13 +42,18 @@ pub async fn run_validate_command(args: ValidateArgs) -> Result<()> {
                     &x.round == round && x.group.as_ref() == group.as_ref() && &x.name == name
                 }) {
                     for post in &t.thread.post_list {
-                        let target_map = if thread.validate_poll_format(post.body.as_str(), post.floor) {
+                        let target_map = if thread.revised.as_deref().unwrap_or_default().contains(&post.floor) {
+                            println!("group {:?} thread {} floor {}: poll revised as valid", group, thread.name, thread.floor);
+                            // Revised as ok.
+                            &mut passed_map
+                        } else if thread.validate_poll_format(post.body.as_str(), post.floor) {
                             // Validate poll result.
                             &mut passed_map
                         } else {
                             // Valid.
                             &mut invalid_map
                         };
+
 
                         match target_map.get_mut(&identifier) {
                             Some(v) => {

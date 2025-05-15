@@ -463,7 +463,11 @@ fn produce_participation_result(
                             Some(post) => {
                                 thread.pid = post.id.clone();
                                 thread.floor = post.floor;
-                                if thread.duplicate.contains(&post.floor) {
+                                if thread.revised.as_deref().unwrap_or_default().contains(&post.floor) {
+                                    // Any way, tolerance it.
+                                    thread.state = Participation::Ok;
+                                    println!("group {:?} thread {} floor {}: poll revised as valid", group.name, thread.name, thread.floor);
+                                } else if thread.duplicate.as_deref().unwrap_or_default().contains(&post.floor) {
                                     // Duplicate floor, invalid.
                                     thread.state = Participation::Invalid;
                                 } else if !thread.validate_poll_format(post.body.as_str(), post.floor) {
