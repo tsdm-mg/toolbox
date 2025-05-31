@@ -1,3 +1,5 @@
+mod bin;
+
 #[cfg(test)]
 mod tests {
     use tm_bbcode_macro::bbx;
@@ -13,15 +15,17 @@ mod tests {
     pub fn test_bbx() {
         let foo = Foo { foo: 1 };
 
+        impl Foo {
+            fn get_number() -> i32 {
+                100
+            }
+        }
+
         let x = bbx!(
             url {
-                {"a"},
-                foo.foo.to_string(),
+                "x",
+                ${ Foo::get_number()}
             },
-            italic {
-                {"c"},
-                 "d"
-            }
         );
     }
 }

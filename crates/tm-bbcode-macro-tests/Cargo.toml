@@ -10,3 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 tm-bbcode-macro.workspace = true
+
+[[bin]]
+name = "test-runner"
+path = "src/bin.rs"

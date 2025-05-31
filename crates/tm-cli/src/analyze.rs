@@ -86,8 +86,8 @@ impl UserParticipation {
             return bbx!(
               td {
                   color {
-                      { WebColor::DarkRed },
-                      DUPLICATE_INFO,
+                      { ${WebColor::DarkRed.to_string()} },
+                      ${DUPLICATE_INFO},
                   }
               }
             );
@@ -103,7 +103,7 @@ impl UserParticipation {
             .collect::<Vec<_>>()
             .join("\n");
 
-        bbx!(td { data })
+        bbx!(td { ${data} })
     }
 }
 
@@ -269,8 +269,8 @@ impl AnalyzeResult {
         let records = self.combine_and_sort();
         let table_header = bbx!(
           tr {
-                td { {TABLE_WIDTH_30}, "楼层" },
-                td { {TABLE_WIDTH_110}, "ID" },
+                td { {${TABLE_WIDTH_30}}, "楼层" },
+                td { {${TABLE_WIDTH_110}}, "ID" },
                 td { "参与情况" }
             },
         );
@@ -281,19 +281,19 @@ impl AnalyzeResult {
                 tr {
                     td {
                         url {
-                          { generate_find_post_link(p.reg_pid.as_str()) },
-                           p.floor.to_string(),
+                          { ${generate_find_post_link(p.reg_pid.as_str())} },
+                           ${p.floor.to_string()},
                         },
                     },
-                    td { p.username.clone() },
-                    p.generate_bbcode(),
+                    td { ${p.username.clone()} },
+                    ${p.generate_bbcode()},
                 }
             );
 
             table_data.push_str(row.as_str());
         }
 
-        bbx! { table { table_data } }
+        bbx! { table { ${table_data} } }
     }
 }
 
