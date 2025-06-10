@@ -80,6 +80,9 @@ pub(crate) struct Reward {
     /// Points tsb.
     pub(crate) tsb: i32,
 
+    /// Points xc.
+    pub(crate) xc: Option<i32>,
+
     /// Moe energy.
     pub(crate) energy: i32,
 
@@ -102,6 +105,12 @@ impl Reward {
             None
         };
 
+        let xc = if self.xc > Some(0) {
+            Some(format!("{}xc", self.xc.unwrap()))
+        } else {
+            None
+        };
+
         let energy = if self.energy > 0 {
             Some(format!("{}能量值", self.energy))
         } else {
@@ -114,7 +123,7 @@ impl Reward {
             None
         };
 
-        let reward = [ww, tsb, energy, credit]
+        let reward = [ww, tsb, xc, energy, credit]
             .into_iter()
             .filter_map(|x| if x.is_some() { Some(x.unwrap()) } else { None })
             .collect::<Vec<_>>()
