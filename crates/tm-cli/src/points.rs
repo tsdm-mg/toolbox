@@ -104,6 +104,8 @@ impl PointsRecord {
         self.special_points += change.special_points;
         self.poll_points += change.poll_points;
         self.energy += change.energy;
+        self.threads_count += change.threads_count;
+        self.threads_points += change.threads_points;
 
         self.update_points();
     }
@@ -201,10 +203,16 @@ struct IncrementRecord {
 
     /// Credits rewarded by participating in polling events.
     poll_points: i32,
+
+    /// Count of published threads.
+    threads_count: i32,
+
+    /// Counts of points accumulated by publishing threads.
+    threads_points: i32,
 }
 
 impl IncrementRecord {
-    fn increment(&mut self, other: &IncrementRecord) {
+    fn increase(&mut self, other: &IncrementRecord) {
         if self.username != other.username {
             return;
         }
@@ -212,6 +220,8 @@ impl IncrementRecord {
         self.energy += other.energy;
         self.special_points += other.special_points;
         self.poll_points += other.poll_points;
+        self.threads_count += other.threads_count;
+        self.threads_points += other.threads_points;
     }
 }
 
@@ -248,6 +258,11 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
         vec![]
     };
 
+    if !extra_changes.is_empty() {
+        println!("extra changes: {:#?}", extra_changes);
+    }
+
+
     let mut user_changes = ChangesMap::new();
 
     for record in [changes.into_iter(), extra_changes.into_iter()]
@@ -255,7 +270,7 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
         .flatten()
     {
         if let Some(v) = user_changes.get_mut(&record.username) {
-            v.increment(&record);
+            v.increase(&record);
         } else {
             user_changes.insert(record.username.clone(), record);
         }
@@ -310,7 +325,9 @@ async fn populate_increment_record(data_path: String) -> Result<Vec<IncrementRec
         .double_quote(true)
         .from_path(data_path)?;
 
-    let points_re = Regex::new(r#"(?<energy>\d+)能量值 \+ (?<points>\d+)积分"#)
+    let energy_re = Regex::new(r#"(?<energy>\d+)能量值"#)
+        .expect("invalid points kind regex");
+    let poll_points_re = Regex::new(r#"(?<points>\d+)积分"#)
         .expect("invalid points kind regex");
 
     let mut records = vec![];
@@ -328,31 +345,36 @@ async fn populate_increment_record(data_path: String) -> Result<Vec<IncrementRec
         let username = record.get(1).unwrap().to_string();
         let points = record.get(4).unwrap();
 
-        let capture = match points_re.captures(points) {
-            Some(v) => v,
-            None => continue,
-        };
+        let energy_capture = energy_re.captures(points);
+        let poll_points_capture = poll_points_re.captures(points);
 
-        let energy = capture
-            .name("energy")
+        let energy = energy_capture.and_then(|x|
+            x.name("energy")
             .unwrap()
             .as_str()
             .to_string()
-            .parse::<i32>()
-            .with_context(|| format!("invalid energy value at floor {floor}"))?;
-        let poll_points = capture
-            .name("points")
-            .unwrap()
-            .as_str()
-            .to_string()
-            .parse::<i32>()
-            .with_context(|| format!("invalid poll_points value at floor {floor}"))?;
+                .parse::<i32>().ok()
+        );
+        let poll_points = poll_points_capture.and_then(
+            |x| x
+                .name("points")
+                .unwrap()
+                .as_str()
+                .to_string()
+                .parse::<i32>().ok()
+        );
+
+        if energy.is_none() && poll_points.is_none() {
+            continue;
+        }
 
         let record = IncrementRecord {
             username,
-            energy,
+            energy: energy.unwrap_or_default(),
             special_points: 0,
-            poll_points,
+            poll_points: poll_points.unwrap_or_default(),
+            threads_points: 0,
+            threads_count: 0,
         };
 
         records.push(record);
@@ -378,6 +400,8 @@ async fn populate_extra_record(data_path: String) -> Result<Vec<IncrementRecord>
                     energy: 0,
                     special_points: if x.name == "特殊积分" { x.value } else { 0 },
                     poll_points: if x.name == "投票积分" { x.value } else { 0 },
+                    threads_count: if x.name == "发帖数量" { x.value } else { 0 },
+                    threads_points: if x.name == "发帖积分" { x.value } else { 0 },
                 })
                 .collect::<Vec<_>>()
         })
