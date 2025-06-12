@@ -60,7 +60,10 @@ impl UserParticipation {
     }
 
     /// Generate a single record.
-    pub(crate) fn generate_csv_record(&self, reward_policy: &RewardPolicy) -> Vec<String> {
+    ///
+    ///
+    /// Floors recorded in `signature_verified_floors` have valid signature link to main activity thread, award extra 5xc points.
+    pub(crate) fn generate_csv_record(&self, reward_policy: &RewardPolicy, signature_verified_floors: Option<&Vec<usize>>) -> Vec<String> {
         let missed_count = self.count_missing_rounds();
         let pat = match missed_count {
             0 => "全过程",
@@ -76,7 +79,11 @@ impl UserParticipation {
             self.uid.to_string(),
             pat.to_string(),
             reward_policy.generate_reward_text(missed_count),
-            String::new(),
+            if signature_verified_floors.map(|x| x.contains(&self.floor)).unwrap_or(false) {
+                String::from("是")
+            } else {
+                String::new()
+            },
             self.missed_info(0).trim().to_string(),
         ]
     }
@@ -255,12 +262,12 @@ impl AnalyzeResult {
     /// * UID
     /// * Participation
     /// * Reward
-    /// * Signature link **not implemented yet**
+    /// * Signature link
     /// * Tip **optional**
-    fn generate_csv_result(&self, reward_policy: &RewardPolicy) -> Vec<Vec<String>> {
+    fn generate_csv_result(&self, reward_policy: &RewardPolicy, verified_signature_floors: Option<Vec<usize>>) -> Vec<Vec<String>> {
         self.combine_and_sort()
             .into_iter()
-            .map(|x| x.generate_csv_record(reward_policy))
+            .map(|x| x.generate_csv_record(reward_policy, verified_signature_floors.as_ref()))
             .collect()
     }
 
@@ -351,6 +358,14 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
     println!("{}", analyze_result.generate_text_result());
 
     if let Some(csv_path) = args.save_csv_path {
+        let signature_verified_floors: Option<Vec<usize>> = if let Some(signature_result_path) = args.signature_result {
+            let signature_verified: Vec<usize> = std::fs::read_to_string(signature_result_path).context("failed to read signature verified result")?.split('\n').map(|x| str::parse::<usize>(x).unwrap()).collect();
+            trace!("load verified signature floors count = {}", signature_verified.len());
+            Some(signature_verified)
+        } else {
+            None
+        };
+        // Load signature files.
         println!("writing csv data to {csv_path}");
         let file = OpenOptions::new()
             .write(true)
@@ -360,7 +375,7 @@ pub async fn run_analyze_command(args: AnalyzeArgs) -> Result<()> {
         let mut builder = csv::WriterBuilder::new()
             .double_quote(true)
             .from_writer(file);
-        for csv_record in analyze_result.generate_csv_result(&config.reward_policy) {
+        for csv_record in analyze_result.generate_csv_result(&config.reward_policy, signature_verified_floors) {
             builder
                 .write_record(csv_record.as_slice())
                 .with_context(|| {

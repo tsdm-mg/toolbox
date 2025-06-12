@@ -76,6 +76,9 @@ pub struct AnalyzeArgs {
     #[arg(long = "save-csv", help = "file to save csv format analyze result")]
     pub save_csv_path: Option<String>,
 
+    #[arg(long = "signature-result", help = "file to load signature verified floors")]
+    pub signature_result: Option<String>,
+
     #[arg(
         long = "save-status",
         help = "file to save bbcode format participation status"
@@ -120,6 +123,13 @@ pub struct SignatureArgs {
         help = "optional dir path to original thread data dir, to sort the result"
     )]
     pub thread_data: Option<String>,
+
+    #[arg(
+        short = 'o',
+        long = "output",
+        help = "file to save linked profile floors, only works when arg thread_data provided"
+    )]
+    pub output: Option<String>,
 }
 
 #[derive(Clone, Debug, Args)]

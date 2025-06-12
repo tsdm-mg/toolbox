@@ -2,6 +2,8 @@ use crate::cmd::SignatureArgs;
 use crate::utils::load_thread_data_from_dir;
 use anyhow::{Context, Result};
 use regex::Regex;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 use tm_api::profile::Profile;
 use tokio::fs;
@@ -42,6 +44,11 @@ pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
 
     match args.thread_data {
         Some(path) => {
+            let (mut output_target, mut tmp_floors) = if let Some(output_path) = args.output {
+                (Some(OpenOptions::new().write(true).create(true).truncate(true).open(&output_path).context("failed to open file to save signature check result")?), Vec::<String>::new())
+            } else {
+                (None, Vec::<String>::new())
+            };
             let thread_data = load_thread_data_from_dir(path.as_str())
                 .await
                 .context("failed to load optional thread data")?;
@@ -57,11 +64,20 @@ pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
                 .collect::<Vec<_>>();
             sorts.sort_by(|(_, f1), (_, f2)| f1.cmp(f2));
 
-            sorts.into_iter().for_each(|(uid, floor)| {
-                if let Some(u) = users_have_content.iter().find(|y| y.uid == uid) {
+            sorts.iter().for_each(|(uid, floor)| {
+                if let Some(u) = users_have_content.iter().find(|y| y.uid == *uid) {
                     println!("{}({} #{})", u.username, u.uid, floor);
+                    if output_target.is_some() {
+                        tmp_floors.push(format!("{floor}"))
+                    }
                 }
             });
+
+            // If we have an output_target to save the verified signature floors, do it.
+            if let Some(file) = output_target.as_mut() {
+                file.write_all(tmp_floors.join("\n").as_bytes()).context("failed to save signature output result")?;
+                ()
+            }
         }
         None => {
             users_have_content
