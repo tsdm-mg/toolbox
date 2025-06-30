@@ -1,4 +1,5 @@
 use crate::post::Post;
+use crate::utils::http_get;
 use crate::ApiError::{ServerRespError, WebRequestError};
 use crate::{decompress_response_to_string, ErrorResponse};
 use anyhow::{Context, Result};
@@ -65,7 +66,7 @@ pub async fn fetch_thread_content(tid: u32, page: u32) -> Result<Thread> {
     let target =
         format!("{BASE_URL}/forum.php?mobile=yes&tsdmapp=1&mod=viewthread&tid={tid}&page={page}");
     debug!("fetch thread on url {target}");
-    let resp = reqwest::get(target.as_str())
+    let resp = http_get(target.as_str())
         .await
         .context("failed to get thread content")?;
     if resp.status() != StatusCode::OK {
