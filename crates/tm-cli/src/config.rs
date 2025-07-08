@@ -599,13 +599,13 @@ impl Thread {
                         .find(|(choices, _)| choices.contains(&ch))
                     {
                         None => {
-                            println!("invalid poll: thread {} floor {} has incorrect unselected choice {}", self.name, post_floor, ch);
+                            println!("invalid poll: thread {} floor {} has incorrect unselected choice \"{}\"", self.name, post_floor, ch);
                             return false;
                         }
                         Some((_, state)) => {
                             if *state == ChoiceState::Selected || *state == ChoiceState::Unselected
                             {
-                                println!("invalid poll: thread {} floor {} has multiple unselected choices on {}", self.name, post_floor, ch);
+                                println!("invalid poll: thread {} floor {} has multiple unselected choices on \"{}\"", self.name, post_floor, ch);
                                 return false;
                             }
 
