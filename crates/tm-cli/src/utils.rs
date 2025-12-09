@@ -40,7 +40,7 @@ pub(crate) struct ThreadPageData {
 ///
 /// When failed to io on stdin/stdout.
 pub fn read_line(hint: impl Into<String>) -> io::Result<String> {
-    print!("{:?} ", hint.into());
+    print!("{} ", hint.into());
     io::stdout().flush()?;
     let mut result = String::new();
     io::stdin().read_line(&mut result)?;
