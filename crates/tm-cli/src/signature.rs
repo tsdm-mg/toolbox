@@ -45,7 +45,17 @@ pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
     match args.thread_data {
         Some(path) => {
             let (mut output_target, mut tmp_floors) = if let Some(output_path) = args.output {
-                (Some(OpenOptions::new().write(true).create(true).truncate(true).open(&output_path).context("failed to open file to save signature check result")?), Vec::<String>::new())
+                (
+                    Some(
+                        OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .truncate(true)
+                            .open(&output_path)
+                            .context("failed to open file to save signature check result")?,
+                    ),
+                    Vec::<String>::new(),
+                )
             } else {
                 (None, Vec::<String>::new())
             };
@@ -75,7 +85,8 @@ pub async fn run_signature_command(args: SignatureArgs) -> Result<()> {
 
             // If we have an output_target to save the verified signature floors, do it.
             if let Some(file) = output_target.as_mut() {
-                file.write_all(tmp_floors.join("\n").as_bytes()).context("failed to save signature output result")?;
+                file.write_all(tmp_floors.join("\n").as_bytes())
+                    .context("failed to save signature output result")?;
                 ()
             }
         }

@@ -262,7 +262,6 @@ pub async fn run_points_command(args: PointsArgs) -> Result<()> {
         println!("extra changes: {:#?}", extra_changes);
     }
 
-
     let mut user_changes = ChangesMap::new();
 
     for record in [changes.into_iter(), extra_changes.into_iter()]
@@ -325,10 +324,8 @@ async fn populate_increment_record(data_path: String) -> Result<Vec<IncrementRec
         .double_quote(true)
         .from_path(data_path)?;
 
-    let energy_re = Regex::new(r#"(?<energy>\d+)能量值"#)
-        .expect("invalid points kind regex");
-    let poll_points_re = Regex::new(r#"(?<points>\d+)积分"#)
-        .expect("invalid points kind regex");
+    let energy_re = Regex::new(r#"(?<energy>\d+)能量值"#).expect("invalid points kind regex");
+    let poll_points_re = Regex::new(r#"(?<points>\d+)积分"#).expect("invalid points kind regex");
 
     let mut records = vec![];
 
@@ -348,21 +345,22 @@ async fn populate_increment_record(data_path: String) -> Result<Vec<IncrementRec
         let energy_capture = energy_re.captures(points);
         let poll_points_capture = poll_points_re.captures(points);
 
-        let energy = energy_capture.and_then(|x|
+        let energy = energy_capture.and_then(|x| {
             x.name("energy")
-            .unwrap()
-            .as_str()
-            .to_string()
-                .parse::<i32>().ok()
-        );
-        let poll_points = poll_points_capture.and_then(
-            |x| x
-                .name("points")
                 .unwrap()
                 .as_str()
                 .to_string()
-                .parse::<i32>().ok()
-        );
+                .parse::<i32>()
+                .ok()
+        });
+        let poll_points = poll_points_capture.and_then(|x| {
+            x.name("points")
+                .unwrap()
+                .as_str()
+                .to_string()
+                .parse::<i32>()
+                .ok()
+        });
 
         if energy.is_none() && poll_points.is_none() {
             continue;

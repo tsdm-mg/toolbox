@@ -76,7 +76,10 @@ pub struct AnalyzeArgs {
     #[arg(long = "save-csv", help = "file to save csv format analyze result")]
     pub save_csv_path: Option<String>,
 
-    #[arg(long = "signature-result", help = "file to load signature verified floors")]
+    #[arg(
+        long = "signature-result",
+        help = "file to load signature verified floors"
+    )]
     pub signature_result: Option<String>,
 
     #[arg(
