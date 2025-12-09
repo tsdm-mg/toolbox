@@ -591,7 +591,8 @@ impl Thread {
             .map(|x| (x, ChoiceState::NotDetermined))
             .collect::<HashMap<&Vec<String>, ChoiceState>>();
 
-        for poll_line in poll_data.split("<br />") {
+        // TODO: Url decoding.
+        for poll_line in poll_data.replace("&amp;", "&").split("<br />") {
             match parse_choice(poll_line.trim()) {
                 Some(Choice::Unselected(ch)) => {
                     match flag_map
